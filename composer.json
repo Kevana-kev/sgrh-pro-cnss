@@ -1,0 +1,7 @@
+{
+  "name": "sgrh-pro-cnss",
+  "description": "Meta root for Railway/Railpack detection — real app in RH_CNSS/sgrh-pro",
+  "require": {
+    "php": ">=8.4.1"
+  }
+}

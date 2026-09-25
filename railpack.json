@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "provider": "php",
+  "packages": {
+    "php": "8.4"
+  },
+  "buildAptPackages": [
+    "git",
+    "unzip",
+    "libzip-dev",
+    "libicu-dev",
+    "libpng-dev"
+  ],
+  "steps": {
+    "install": {
+      "commands": [
+        {
+          "cmd": "cd RH_CNSS/sgrh-pro && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-interaction --no-scripts",
+          "customName": "Composer install (Laravel)"
+        }
+      ]
+    },
+    "build": {
+      "inputs": [{ "step": "install" }],
+      "commands": [
+        {
+          "cmd": "cd RH_CNSS/sgrh-pro && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache && chmod -R 775 storage bootstrap/cache && COMPOSER_ALLOW_SUPERUSER=1 php artisan package:discover --ansi || true",
+          "customName": "Prepare Laravel storage"
+        }
+      ]
+    }
+  },
+  "deploy": {
+    "startCommand": "bash /app/start.sh",
+    "aptPackages": ["git", "unzip"]
+  }
+}

@@ -1,52 +1,47 @@
 # Déploiement Railway — SGRH Pro
+# Repo : https://github.com/Kevana-kev/sgrh-pro-cnss
 
-Repo : https://github.com/Kevana-kev/sgrh-pro-cnss
+## Erreur « Railpack could not determine how to build »
 
-## Pourquoi le build a échoué
+Railway analyse la **racine** du monorepo (MEMOIRE, scripts…) et ne trouve pas Laravel.
+**Correction poussée** : `railpack.json` + `composer.json` + `start.sh` à la racine.
 
-Railway a tenté **Railpack** sur la **racine** du dépôt (mémoire + scripts + app).
-Sans `Dockerfile` à la racine, il ne détecte pas Laravel → `Railpack failed to prepare the build`.
+## Action OBLIGATOIRE dans l’interface Railway
 
-De plus : **0 Variables** → même un build réussi ne démarrerait pas sans `APP_KEY` + MySQL.
+### Option A (recommandée) — Root Directory
 
-## Correction (déjà poussée)
+1. Service `sgrh-pro-cnss` → **Settings**
+2. **Root Directory** = `RH_CNSS/sgrh-pro`
+3. **Builder** = Railpack **ou** Dockerfile
+4. **Redeploy**
 
-- `Dockerfile` à la **racine**
-- `railway.toml` force `builder = "DOCKERFILE"`
+Avec ce Root Directory, Railway ne voit que l’app Laravel.
 
-## Étapes dans Railway (à faire maintenant)
+### Option B — Docker à la racine
 
-### 1. Settings du service `sgrh-pro-cnss`
+1. Settings → **Builder** = **Dockerfile** (pas Railpack)
+2. Dockerfile path = `Dockerfile`
+3. Root Directory = **vide**
+4. Redeploy
 
-- **Root Directory** : laisser **vide** (racine du repo)  
-  OU mettre `RH_CNSS/sgrh-pro` si tu utilises le Dockerfile interne
-- **Builder** : Docker (détecté via `railway.toml`)
-
-### 2. Ajouter MySQL
-
-Add → Database → MySQL
-
-### 3. Variables (Variables) — obligatoire
+### Variables (toujours)
 
 | Variable | Valeur |
 |----------|--------|
-| `APP_NAME` | `SGRH Pro` |
+| `APP_KEY` | `base64:E5ke1YNgPSEspJIu085MZspWZB48ko2Bb5HRkuvkawk=` |
 | `APP_ENV` | `production` |
 | `APP_DEBUG` | `false` |
-| `APP_KEY` | `base64:E5ke1YNgPSEspJIu085MZspWZB48ko2Bb5HRkuvkawk=` |
-| `APP_URL` | ton URL Railway (après premier deploy) |
+| `APP_URL` | URL `.up.railway.app` |
 | `DB_CONNECTION` | `mysql` |
 | `DB_HOST` | `${{MySQL.MYSQLHOST}}` |
 | `DB_PORT` | `${{MySQL.MYSQLPORT}}` |
 | `DB_DATABASE` | `${{MySQL.MYSQLDATABASE}}` |
 | `DB_USERNAME` | `${{MySQL.MYSQLUSER}}` |
 | `DB_PASSWORD` | `${{MySQL.MYSQLPASSWORD}}` |
-| `SEED_ON_BOOT` | `true` (1er deploy), puis `false` |
+| `SEED_ON_BOOT` | `true` puis `false` |
 
-### 4. Redeploy
-
-Deployments → Redeploy (ou push sur `main`)
+Ajoute aussi un plugin **MySQL**.
 
 ## Limite
 
-Le lecteur **ZK-9500** ne tourne pas sur Railway (USB Windows local uniquement).
+ZK-9500 (USB) ne tourne pas sur Railway.
