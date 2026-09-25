@@ -1,4 +1,6 @@
-FROM php:8.3-cli-bookworm
+FROM php:8.4-cli-bookworm
+
+ENV COMPOSER_ALLOW_SUPERUSER=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git unzip libzip-dev libicu-dev libpng-dev libonig-dev \
