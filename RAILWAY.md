@@ -28,15 +28,13 @@ Le Dockerfile racine fait `COPY sgrh-pro/ /app/` car le contexte Docker = dossie
 
 ## Biométrie en ligne (Railway)
 
-L’app cloud ne peut pas voir le USB. Le **navigateur** parle au bridge local :
+1. Sur le PC Windows du terminal : lancer **`RH_CNSS/fingerprint-service/installer/INSTALLER.bat`**
+2. Brancher le ZK-9500
+3. Ouvrir https://sgrh-pro-cnss-production.up.railway.app **sur ce PC**
+4. Clic **Empreinte** → le site déclenche `sgrhbridge://start` → bridge en arrière-plan → scan
 
-1. Branchez le ZK-9500 sur le PC de démo
-2. Démarrez `Fingerprint Bridge` (port **5002**) — rebuild recommandé après CORS
-3. Ouvrez https://sgrh-pro-cnss-production.up.railway.app sur **ce même PC**
-4. Enrôlement / pointage empreinte fonctionnent via `localhost:5002`
-
-Variable utile : `BIOMETRIC_BRIDGE_API_KEY=local-secret-key` (app + bridge).
+L’installeur enregistre le protocole, le démarrage auto et la clé `local-secret-key`.
 
 ## Limite
 
-Sans bridge démarré sur le PC qui ouvre le site, l’empreinte reste indisponible (RFID OK).
+Sans l’installeur Windows sur le PC qui ouvre le site, l’empreinte ne peut pas parler au lecteur USB (RFID OK).

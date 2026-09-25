@@ -14,6 +14,9 @@ Get-Process -Name "FingerprintBridge" -ErrorAction SilentlyContinue | Stop-Proce
 schtasks /Delete /TN $TaskName /F 2>$null | Out-Null
 netsh advfirewall firewall delete rule name="SGRH Fingerprint Bridge $Port" 2>$null | Out-Null
 
+Remove-Item "HKLM:\SOFTWARE\Classes\sgrhbridge" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item "HKLM:\SOFTWARE\Classes\sgrh-fingerprint" -Recurse -Force -ErrorAction SilentlyContinue
+
 $startup = [Environment]::GetFolderPath("CommonStartup")
 $desk = [Environment]::GetFolderPath("CommonDesktopDirectory")
 $startMenu = Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\SGRH Pro"
@@ -25,6 +28,7 @@ Remove-Item $startMenu -Recurse -Force -ErrorAction SilentlyContinue
 [Environment]::SetEnvironmentVariable("FINGERPRINT_BRIDGE_FORCE_DEVICE", $null, "Machine")
 [Environment]::SetEnvironmentVariable("FINGERPRINT_BRIDGE_ALLOW_MOCK", $null, "Machine")
 [Environment]::SetEnvironmentVariable("FINGERPRINT_BRIDGE_PORT", $null, "Machine")
+[Environment]::SetEnvironmentVariable("SGRH_BRIDGE_PROTOCOL", $null, "Machine")
 
 if (Test-Path $InstallDir) {
   Remove-Item $InstallDir -Recurse -Force -ErrorAction SilentlyContinue

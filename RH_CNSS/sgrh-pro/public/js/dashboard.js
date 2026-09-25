@@ -4210,33 +4210,19 @@ async function verifyFingerprintTemplate(template, employeeId, pendingTemplates)
 
 async function scanFingerprintFromBridge() {
   if (window.LocalBiometricBridge) {
-    const st = await window.LocalBiometricBridge.status();
-    if (!st.ok) {
-      throw new Error(st.message || "Lecteur biométrique non connecté");
-    }
-    const scanData = await window.LocalBiometricBridge.scan();
+    const scanData = await window.LocalBiometricBridge.scan({
+      onProgress: (msg) => {
+        const fpStatus = $("fingerprintStatus");
+        if (fpStatus) fpStatus.textContent = msg;
+      },
+    });
     if (!scanData.template) {
       throw new Error("Aucun gabarit reçu du lecteur");
     }
     return scanData.template;
   }
 
-  const pingData = await api("/api/biometric/status");
-  if (!pingData.connected && pingData.status !== "ok") {
-    throw new Error("Lecteur biométrique non connecté — démarrez le bridge local (port 5002)");
-  }
-
-  const scanData = await api("/api/biometric/scan", {
-    method: "POST",
-    body: "{}",
-    signal: AbortSignal.timeout(35000),
-  });
-
-  if (!scanData.template) {
-    throw new Error("Aucun gabarit reçu du lecteur");
-  }
-
-  return scanData.template;
+  throw new Error("Client bridge manquant — rechargez la page.");
 }
 
 async function checkBiometricBridgeStatus() {
@@ -4249,16 +4235,21 @@ async function checkBiometricBridgeStatus() {
     const local = await localBridgeStatus();
     if (local.ok) {
       if (dot) { dot.className = "status-dot online"; }
-      if (status) status.textContent = "Lecteur biométrique connecté (bridge local port 5002)";
+      if (status) status.textContent = "Lecteur biométrique prêt (bridge local)";
       return;
     }
-    throw new Error(local.message || "bridge non disponible");
+    // Offline : on indique que le clic Empreinte démarrera le bridge installé
+    if (dot) { dot.className = "status-dot offline"; }
+    if (status) {
+      status.textContent =
+        "Bridge en veille — au clic Empreinte, lancement auto (installeur SGRH requis)";
+    }
   } catch (e) {
     if (dot)    { dot.className = "status-dot offline"; }
     if (status) {
       status.textContent =
         e.message ||
-        "Lecteur non disponible — démarrez Fingerprint Bridge sur ce PC (port 5002), même si l'app est en ligne.";
+        "Installez SGRH Fingerprint Bridge (INSTALLER.bat) sur ce PC Windows.";
     }
   }
 }

@@ -1,14 +1,35 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Windows.Forms;
 
 internal static class Program
 {
+    private const string MutexName = "Global\\SGRHProFingerprintBridgeSingleton";
+
     [STAThread]
     static void Main(string[] args)
     {
-        // support headless/service mode: run the local web API without showing UI
-        if (args != null && args.Length > 0 && Array.Exists(args, a => a == "--headless"))
+        var wantHeadless = ShouldRunHeadless(args);
+
+        // Une seule instance : si déjà lancé, le clic web ne fait rien de plus.
+        bool createdNew;
+        using var mutex = new Mutex(true, MutexName, out createdNew);
+        if (!createdNew)
+        {
+            try
+            {
+                var ap = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FingerprintBridge");
+                Directory.CreateDirectory(ap);
+                File.AppendAllText(
+                    Path.Combine(ap, "bridge.log"),
+                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Instance déjà active (demande web/install ignorée).{Environment.NewLine}");
+            }
+            catch { }
+            return;
+        }
+
+        if (wantHeadless)
         {
             try
             {
@@ -17,7 +38,6 @@ internal static class Program
             }
             catch (Exception ex)
             {
-                // best-effort logging
                 try
                 {
                     var ap = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FingerprintBridge");
@@ -32,5 +52,20 @@ internal static class Program
 
         ApplicationConfiguration.Initialize();
         Application.Run(new MainForm());
+    }
+
+    private static bool ShouldRunHeadless(string[]? args)
+    {
+        if (args == null || args.Length == 0) return false;
+        foreach (var a in args)
+        {
+            if (string.IsNullOrWhiteSpace(a)) continue;
+            var v = a.Trim();
+            if (v.Equals("--headless", StringComparison.OrdinalIgnoreCase)) return true;
+            if (v.Equals("--from-web", StringComparison.OrdinalIgnoreCase)) return true;
+            if (v.StartsWith("sgrhbridge:", StringComparison.OrdinalIgnoreCase)) return true;
+            if (v.StartsWith("sgrh-fingerprint:", StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
     }
 }

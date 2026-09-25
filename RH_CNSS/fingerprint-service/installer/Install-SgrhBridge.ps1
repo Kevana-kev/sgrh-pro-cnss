@@ -114,6 +114,34 @@ function Write-Config {
   # Headless utilise %AppData% utilisateur — on crée aussi un lanceur qui set l'env
 }
 
+function Write-ProtocolHandler {
+  Write-Step "Enregistrement protocole web sgrhbridge:// (lancement depuis le site)"
+  $exe = Join-Path $InstallDir "FingerprintBridge.exe"
+  if (-not (Test-Path $exe)) {
+    Write-Host "  [!] FingerprintBridge.exe introuvable — protocole non enregistré." -ForegroundColor Yellow
+    return
+  }
+
+  # Commande : démarrage headless silencieux depuis Chrome/Edge
+  $command = "`"$exe`" --headless --from-web `"%1`""
+
+  foreach ($root in @(
+      "HKLM:\SOFTWARE\Classes\sgrhbridge",
+      "HKLM:\SOFTWARE\Classes\sgrh-fingerprint"
+    )) {
+    New-Item -Path $root -Force | Out-Null
+    New-ItemProperty -Path $root -Name "(Default)" -Value "URL:SGRH Fingerprint Bridge" -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $root -Name "URL Protocol" -Value "" -PropertyType String -Force | Out-Null
+    New-Item -Path "$root\DefaultIcon" -Force | Out-Null
+    New-ItemProperty -Path "$root\DefaultIcon" -Name "(Default)" -Value "`"$exe`",0" -PropertyType String -Force | Out-Null
+    New-Item -Path "$root\shell\open\command" -Force | Out-Null
+    New-ItemProperty -Path "$root\shell\open\command" -Name "(Default)" -Value $command -PropertyType String -Force | Out-Null
+  }
+
+  [Environment]::SetEnvironmentVariable("SGRH_BRIDGE_PROTOCOL", "sgrhbridge", "Machine")
+  Write-Host "  Protocoles: sgrhbridge:// et sgrh-fingerprint://" -ForegroundColor Green
+}
+
 function Write-Launcher {
   Write-Step "Création du lanceur headless"
   $launcher = Join-Path $InstallDir $LauncherName
@@ -212,6 +240,7 @@ Copy-Payload
 $zkOk = Install-ZkSdkFiles
 Write-Config
 Write-Launcher
+Write-ProtocolHandler
 Set-FirewallRule
 Write-Uninstaller
 Start-Bridge
@@ -222,6 +251,7 @@ Write-Host "  Dossier     : $InstallDir"
 Write-Host "  Config      : $ConfigPath"
 Write-Host "  API Key     : $ApiKey"
 Write-Host "  URL bridge  : http://127.0.0.1:$Port"
+Write-Host "  Protocole   : sgrhbridge://start  (clic Empreinte sur le site web)"
 Write-Host "  Laravel .env: BIOMETRIC_BRIDGE_API_KEY=$ApiKey"
 if (-not $zkOk) {
   Write-Host ""

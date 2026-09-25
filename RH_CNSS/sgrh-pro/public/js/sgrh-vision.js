@@ -327,16 +327,15 @@
 
   async function punchFingerprint() {
     setScanning(true);
-    setPunchResult(null, "Scan en cours…", "Posez le doigt à plat sur le lecteur ZK-9500.");
+    setPunchResult(null, "Préparation…", "Connexion au bridge biométrique local.");
     try {
       if (!window.LocalBiometricBridge) {
         throw new Error("Client bridge manquant — rechargez la page.");
       }
-      const st = await window.LocalBiometricBridge.status();
-      if (!st.ok) {
-        throw new Error(st.message || "Bridge local non détecté (port 5002).");
-      }
-      const scan = await window.LocalBiometricBridge.scan();
+      setPunchResult(null, "Scan en cours…", "Posez le doigt à plat sur le lecteur ZK-9500.");
+      const scan = await window.LocalBiometricBridge.scan({
+        onProgress: (msg) => setPunchResult(null, msg, "Lancement du bridge installé…"),
+      });
       if (!scan.template) throw new Error("Aucun template reçu du bridge.");
 
       setPunchResult(null, "Identification…", "Comparaison 1:N avec les empreintes enrôlées.");

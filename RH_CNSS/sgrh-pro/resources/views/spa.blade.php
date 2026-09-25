@@ -1838,9 +1838,9 @@
         });
       }
     </script>
-    <script src="{{ asset('js/biometric-bridge-client.js') }}?v=20260925a"></script>
-    <script src="{{ asset('js/dashboard.js') }}?v=20260925a"></script>
-    <script src="{{ asset('js/sgrh-vision.js') }}?v=20260925a"></script>
+    <script src="{{ asset('js/biometric-bridge-client.js') }}?v=20260925b"></script>
+    <script src="{{ asset('js/dashboard.js') }}?v=20260925b"></script>
+    <script src="{{ asset('js/sgrh-vision.js') }}?v=20260925b"></script>
   
     <div class="rfid-modal-backdrop" id="rfidModal">
       <div class="rfid-modal">
