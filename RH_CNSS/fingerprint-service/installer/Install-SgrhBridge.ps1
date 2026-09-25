@@ -185,16 +185,28 @@ function Write-Launcher {
     $sc.Save()
   }
 
-  schtasks /Delete /TN $TaskName /F 2>$null | Out-Null
-  schtasks /Create /TN $TaskName /SC ONLOGON /RL HIGHEST /TR ('"' + $launcher + '"') /F | Out-Null
-  Write-Host "  Tache planifiee: $TaskName" -ForegroundColor Green
+  # schtasks /Delete echoue si la tache n'existe pas -> ne pas stopper l'install
+  $prevEap = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  cmd /c "schtasks /Delete /TN `"$TaskName`" /F >nul 2>&1"
+  cmd /c "schtasks /Create /TN `"$TaskName`" /SC ONLOGON /RL HIGHEST /TR `"\"$launcher\"`" /F >nul 2>&1"
+  $taskOk = ($LASTEXITCODE -eq 0)
+  $ErrorActionPreference = $prevEap
+  if ($taskOk) {
+    Write-Host "  Tache planifiee: $TaskName" -ForegroundColor Green
+  } else {
+    Write-Host "  [!] Tache planifiee non creee (raccourci Startup suffit)." -ForegroundColor Yellow
+  }
 }
 
 function Set-FirewallRule {
   Write-Step "Regle pare-feu locale (port $Port)"
   $rule = "SGRH Fingerprint Bridge $Port"
-  netsh advfirewall firewall delete rule name="$rule" 2>$null | Out-Null
-  netsh advfirewall firewall add rule name="$rule" dir=in action=allow protocol=TCP localport=$Port profile=any | Out-Null
+  $prevEap = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  cmd /c "netsh advfirewall firewall delete rule name=`"$rule`" >nul 2>&1"
+  cmd /c "netsh advfirewall firewall add rule name=`"$rule`" dir=in action=allow protocol=TCP localport=$Port profile=any >nul 2>&1"
+  $ErrorActionPreference = $prevEap
 }
 
 function Stop-OldBridge {
