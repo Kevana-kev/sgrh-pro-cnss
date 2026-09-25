@@ -14,7 +14,7 @@ Sur **chaque PC Windows** du terminal de pointage :
 | Fichier | Rôle |
 |---|---|
 | `INSTALLER.bat` | **One-touch** (élévation UAC + install) |
-| `Install-SgrhBridge.ps1` | Script d’installation |
+| `Setup-SgrhBridge.ps1` | Script d’installation |
 | `Uninstall-SgrhBridge.ps1` | Désinstallation |
 | `Build-Payload.ps1` | Rebuild du payload self-contained |
 | `payload/` | Binaires bridge (générés) |
