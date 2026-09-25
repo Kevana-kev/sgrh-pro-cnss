@@ -125,6 +125,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Biometric (authenticated)
     Route::post('/biometric/scan', [BiometricApiController::class, 'scan']);
     Route::get('/biometric/status', [BiometricApiController::class, 'status']);
+    Route::get('/biometric/match-gallery', [BiometricApiController::class, 'matchGallery']);
     Route::post('/biometric/verify-template', [BiometricApiController::class, 'verifyTemplate']);
     Route::get('/biometric/enrolled', [BiometricApiController::class, 'enrolled']);
     Route::post('/biometric/enroll/{employeeId}', [BiometricApiController::class, 'enroll']);

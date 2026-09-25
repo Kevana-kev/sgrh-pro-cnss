@@ -94,6 +94,7 @@ class FingerprintTemplateService
 
     /**
      * @param  array<int, string>  $pendingTemplates
+     * @param  array{matched?:bool,empreinte_id?:int,score?:int}|null  $clientMatch
      * @return array{message:string, type:string, employee_name?:string}|null
      */
     public function findDuplicate(
@@ -101,6 +102,7 @@ class FingerprintTemplateService
         BiometricBridgeService $bridge,
         ?int $employeeId = null,
         array $pendingTemplates = [],
+        ?array $clientMatch = null,
     ): ?array {
         foreach ($pendingTemplates as $pending) {
             if ($pending === $probeTemplate) {
@@ -137,31 +139,34 @@ class FingerprintTemplateService
             }
         }
 
-        $gallery = [];
-        foreach ($employees as $employee) {
-            foreach (self::decode($employee->fingerprint_template) as $stored) {
+        $match = null;
+        if (is_array($clientMatch) && array_key_exists('matched', $clientMatch)) {
+            $match = $clientMatch;
+        } else {
+            $gallery = [];
+            foreach ($employees as $employee) {
+                foreach (self::decode($employee->fingerprint_template) as $stored) {
+                    $gallery[] = [
+                        'id' => (int) $employee->id,
+                        'template_b64' => $stored,
+                    ];
+                }
+            }
+
+            foreach ($pendingTemplates as $stored) {
                 $gallery[] = [
-                    'id' => (int) $employee->id,
+                    'id' => $employeeId ?? -1,
                     'template_b64' => $stored,
                 ];
             }
-        }
 
-        foreach ($pendingTemplates as $stored) {
-            $gallery[] = [
-                'id' => $employeeId ?? -1,
-                'template_b64' => $stored,
-            ];
-        }
-
-        if ($gallery === []) {
-            return null;
-        }
-
-        try {
-            $match = $bridge->match($probeTemplate, $gallery);
-        } catch (\Throwable) {
-            return null;
+            if ($gallery !== []) {
+                try {
+                    $match = $bridge->match($probeTemplate, $gallery);
+                } catch (\Throwable) {
+                    $match = null;
+                }
+            }
         }
 
         if (! ($match['matched'] ?? false)) {
@@ -179,6 +184,14 @@ class FingerprintTemplateService
             return [
                 'message' => 'Cette empreinte correspond à un doigt déjà enregistré pour cet employé.',
                 'type' => 'self_fuzzy',
+            ];
+        }
+
+        // Pending session fingers use temporary id -1
+        if ($matchedId === -1 || ($employeeId && $matchedId === $employeeId)) {
+            return [
+                'message' => 'Cette empreinte correspond à un doigt déjà scanné dans cette session.',
+                'type' => 'session_fuzzy',
             ];
         }
 

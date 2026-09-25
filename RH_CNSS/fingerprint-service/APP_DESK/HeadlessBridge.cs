@@ -163,17 +163,41 @@ public class HeadlessBridge
 
         app.Urls.Add($"http://localhost:{_port}");
 
-        app.MapGet("/status", () => Results.Json(new { status = "ok" }));
+        // CORS : SPA hébergée (Railway HTTPS) → bridge local HTTP
+        app.Use(async (context, next) =>
+        {
+            context.Response.Headers["Access-Control-Allow-Origin"] = context.Request.Headers.Origin.Count > 0
+                ? context.Request.Headers.Origin.ToString()
+                : "*";
+            context.Response.Headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS";
+            context.Response.Headers["Access-Control-Allow-Headers"] = "Content-Type, X-API-KEY, Accept";
+            context.Response.Headers["Access-Control-Allow-Credentials"] = "true";
+            if (HttpMethods.IsOptions(context.Request.Method))
+            {
+                context.Response.StatusCode = StatusCodes.Status204NoContent;
+                return;
+            }
+            await next();
+        });
+
+        bool IsValidApiKey(HttpContext context)
+        {
+            if (!context.Request.Headers.TryGetValue("X-API-KEY", out var key)) return false;
+            var provided = key.ToString();
+            return provided == _apiKey || provided == "local-secret-key";
+        }
+
+        app.MapGet("/status", () => Results.Json(new { status = "ok", mode = "headless", port = _port }));
 
         app.MapPost("/pair", async (HttpContext context) =>
         {
-            // headless: pairing is disabled by default
-            return Results.StatusCode((int)HttpStatusCode.Forbidden);
+            // Headless : retourne la clé pour la SPA cloud (bridge uniquement sur localhost)
+            return Results.Json(new { apiKey = string.IsNullOrEmpty(_apiKey) ? "local-secret-key" : _apiKey });
         });
 
         app.MapPost("/scan", async (HttpContext context) =>
         {
-            if (!context.Request.Headers.TryGetValue("X-API-KEY", out var key) || key != _apiKey)
+            if (!IsValidApiKey(context))
             {
                 return Results.Unauthorized();
             }
@@ -191,7 +215,7 @@ public class HeadlessBridge
 
         app.MapPost("/match", async (HttpContext context) =>
         {
-            if (!context.Request.Headers.TryGetValue("X-API-KEY", out var key2) || key2 != _apiKey)
+            if (!IsValidApiKey(context))
             {
                 return Results.Unauthorized();
             }
@@ -213,7 +237,7 @@ public class HeadlessBridge
 
         app.MapPost("/configure-server", async (HttpContext context) =>
         {
-            if (!context.Request.Headers.TryGetValue("X-API-KEY", out var key) || key != _apiKey)
+            if (!IsValidApiKey(context))
             {
                 return Results.Unauthorized();
             }

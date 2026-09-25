@@ -30,7 +30,30 @@ class BiometricApiController extends Controller
 
     public function status(): JsonResponse
     {
-        return response()->json($this->bridge->status());
+        // Mode cloud : le statut réel vient du bridge local (navigateur → localhost:5002).
+        // On expose aussi la config client pour la SPA.
+        $server = $this->bridge->status();
+
+        return response()->json([
+            'status' => ($server['connected'] ?? false) ? 'ok' : 'client_bridge',
+            'connected' => (bool) ($server['connected'] ?? false),
+            'mode' => 'hybrid',
+            'message' => ($server['connected'] ?? false)
+                ? 'Bridge serveur accessible'
+                : 'Utilisez le bridge local sur ce PC (port 5002) — l’app cloud parle au lecteur via le navigateur.',
+            'client_bridge' => [
+                'url' => 'http://127.0.0.1:5002',
+                'api_key' => config('services.biometric.bridge_api_key', 'local-secret-key'),
+            ],
+        ]);
+    }
+
+    public function matchGallery(): JsonResponse
+    {
+        return response()->json([
+            'gallery' => $this->fingerprints->buildMatchGallery(),
+            'threshold' => $this->fingerprints->matchThreshold(),
+        ]);
     }
 
     public function verifyTemplate(Request $request): JsonResponse
@@ -40,6 +63,10 @@ class BiometricApiController extends Controller
             'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
             'pending_templates' => ['nullable', 'array', 'max:2'],
             'pending_templates.*' => ['string'],
+            'client_match' => ['nullable', 'array'],
+            'client_match.matched' => ['nullable', 'boolean'],
+            'client_match.empreinte_id' => ['nullable', 'integer'],
+            'client_match.score' => ['nullable', 'integer'],
         ]);
 
         $duplicate = $this->fingerprints->findDuplicate(
@@ -47,6 +74,7 @@ class BiometricApiController extends Controller
             $this->bridge,
             isset($data['employee_id']) ? (int) $data['employee_id'] : null,
             $data['pending_templates'] ?? [],
+            $data['client_match'] ?? null,
         );
 
         if ($duplicate) {

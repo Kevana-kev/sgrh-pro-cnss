@@ -4165,13 +4165,41 @@ function buildBioActionMenu(e) {
   </div>`;
 }
 
+async function localBridgeStatus() {
+  if (window.LocalBiometricBridge) {
+    return window.LocalBiometricBridge.status();
+  }
+  try {
+    const res = await fetch(`${BIOMETRIC_BRIDGE_URL}/status`, { signal: AbortSignal.timeout(2500) });
+    const data = await res.json();
+    return { ok: data.status === "ok", status: data.status, message: "Bridge local OK" };
+  } catch {
+    return { ok: false, message: "Bridge ZK-9500 non détecté sur ce PC (port 5002)" };
+  }
+}
+
 async function verifyFingerprintTemplate(template, employeeId, pendingTemplates) {
+  let clientMatch = null;
+  try {
+    const galleryPayload = await api("/api/biometric/match-gallery");
+    const gallery = [
+      ...(galleryPayload.gallery || []),
+      ...pendingTemplates.map((t) => ({ id: employeeId ? parseInt(employeeId, 10) : -1, template_b64: t })),
+    ];
+    if (gallery.length && window.LocalBiometricBridge) {
+      clientMatch = await window.LocalBiometricBridge.match(template, gallery);
+    }
+  } catch {
+    clientMatch = null;
+  }
+
   const result = await api("/api/biometric/verify-template", {
     method: "POST",
     body: JSON.stringify({
       template,
       employee_id: employeeId ? parseInt(employeeId, 10) : null,
       pending_templates: pendingTemplates,
+      client_match: clientMatch,
     }),
   });
 
@@ -4181,9 +4209,21 @@ async function verifyFingerprintTemplate(template, employeeId, pendingTemplates)
 }
 
 async function scanFingerprintFromBridge() {
+  if (window.LocalBiometricBridge) {
+    const st = await window.LocalBiometricBridge.status();
+    if (!st.ok) {
+      throw new Error(st.message || "Lecteur biométrique non connecté");
+    }
+    const scanData = await window.LocalBiometricBridge.scan();
+    if (!scanData.template) {
+      throw new Error("Aucun gabarit reçu du lecteur");
+    }
+    return scanData.template;
+  }
+
   const pingData = await api("/api/biometric/status");
-  if (!pingData.status || pingData.status !== "ok") {
-    throw new Error("Lecteur biométrique non connecté");
+  if (!pingData.connected && pingData.status !== "ok") {
+    throw new Error("Lecteur biométrique non connecté — démarrez le bridge local (port 5002)");
   }
 
   const scanData = await api("/api/biometric/scan", {
@@ -4206,16 +4246,20 @@ async function checkBiometricBridgeStatus() {
   if (status) status.textContent = "Vérification du lecteur biométrique...";
 
   try {
-    const data = await api("/api/biometric/status");
-    if (data.status === "ok") {
+    const local = await localBridgeStatus();
+    if (local.ok) {
       if (dot) { dot.className = "status-dot online"; }
-      if (status) status.textContent = "Lecteur biométrique connecté et opérationnel";
-    } else {
-      throw new Error("bridge non disponible");
+      if (status) status.textContent = "Lecteur biométrique connecté (bridge local port 5002)";
+      return;
     }
-  } catch {
+    throw new Error(local.message || "bridge non disponible");
+  } catch (e) {
     if (dot)    { dot.className = "status-dot offline"; }
-    if (status) status.textContent = "Lecteur biométrique non disponible — vérifiez que le service est démarré sur le port 5002";
+    if (status) {
+      status.textContent =
+        e.message ||
+        "Lecteur non disponible — démarrez Fingerprint Bridge sur ce PC (port 5002), même si l'app est en ligne.";
+    }
   }
 }
 

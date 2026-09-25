@@ -13,9 +13,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,500;8..60,700&display=swap" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="{{ asset('css/dashboard.css') }}?v=20260831d" />
-    <link rel="stylesheet" href="{{ asset('css/dashboard-pro.css') }}?v=20260831d" />
-    <link rel="stylesheet" href="{{ asset('css/sgrh-vision.css') }}?v=20260831d" />
+    <link rel="stylesheet" href="{{ asset('css/dashboard.css') }}?v=20260925a" />
+    <link rel="stylesheet" href="{{ asset('css/dashboard-pro.css') }}?v=20260925a" />
+    <link rel="stylesheet" href="{{ asset('css/sgrh-vision.css') }}?v=20260925a" />
+    <meta name="biometric-bridge-url" content="http://127.0.0.1:5002" />
+    <meta name="biometric-bridge-key" content="{{ config('services.biometric.bridge_api_key', 'local-secret-key') }}" />
   </head>
   <body>
     <div class="bg-orb orb-1"></div>
@@ -1836,8 +1838,9 @@
         });
       }
     </script>
-    <script src="{{ asset('js/dashboard.js') }}?v=20260831d"></script>
-    <script src="{{ asset('js/sgrh-vision.js') }}?v=20260831d"></script>
+    <script src="{{ asset('js/biometric-bridge-client.js') }}?v=20260925a"></script>
+    <script src="{{ asset('js/dashboard.js') }}?v=20260925a"></script>
+    <script src="{{ asset('js/sgrh-vision.js') }}?v=20260925a"></script>
   
     <div class="rfid-modal-backdrop" id="rfidModal">
       <div class="rfid-modal">

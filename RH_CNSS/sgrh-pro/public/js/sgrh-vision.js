@@ -329,16 +329,36 @@
     setScanning(true);
     setPunchResult(null, "Scan en cours…", "Posez le doigt à plat sur le lecteur ZK-9500.");
     try {
-      const scan = await api("/api/biometric/scan", {
-        method: "POST",
-        headers: { Accept: "application/json", "Content-Type": "application/json" },
-        body: "{}",
-      });
+      if (!window.LocalBiometricBridge) {
+        throw new Error("Client bridge manquant — rechargez la page.");
+      }
+      const st = await window.LocalBiometricBridge.status();
+      if (!st.ok) {
+        throw new Error(st.message || "Bridge local non détecté (port 5002).");
+      }
+      const scan = await window.LocalBiometricBridge.scan();
       if (!scan.template) throw new Error("Aucun template reçu du bridge.");
+
       setPunchResult(null, "Identification…", "Comparaison 1:N avec les empreintes enrôlées.");
+      const galleryPayload = await api("/api/biometric/match-gallery");
+      const gallery = galleryPayload.gallery || [];
+      const threshold = galleryPayload.threshold || 40;
+
+      let employeeId = null;
+      if (gallery.length) {
+        const match = await window.LocalBiometricBridge.match(scan.template, gallery);
+        if (match.matched && (match.score || 0) >= threshold && match.empreinte_id > 0) {
+          employeeId = match.empreinte_id;
+        }
+      }
+
+      const body = employeeId
+        ? { method: "fingerprint", employee_id: employeeId, template: scan.template }
+        : { method: "fingerprint", template: scan.template };
+
       const result = await api("/api/presence/punch", {
         method: "POST",
-        body: JSON.stringify({ method: "fingerprint", template: scan.template }),
+        body: JSON.stringify(body),
       });
       announcePunch(result);
       await loadTodayBoard();

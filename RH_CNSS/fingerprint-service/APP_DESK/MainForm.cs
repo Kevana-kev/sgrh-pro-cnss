@@ -180,7 +180,30 @@ public partial class MainForm : Form
 
         app.Urls.Add($"http://localhost:{_port}");
 
-        app.MapGet("/status", () => Results.Json(new { status = "ok" }));
+        app.Use(async (context, next) =>
+        {
+            context.Response.Headers["Access-Control-Allow-Origin"] = context.Request.Headers.Origin.Count > 0
+                ? context.Request.Headers.Origin.ToString()
+                : "*";
+            context.Response.Headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS";
+            context.Response.Headers["Access-Control-Allow-Headers"] = "Content-Type, X-API-KEY, Accept";
+            context.Response.Headers["Access-Control-Allow-Credentials"] = "true";
+            if (HttpMethods.IsOptions(context.Request.Method))
+            {
+                context.Response.StatusCode = StatusCodes.Status204NoContent;
+                return;
+            }
+            await next();
+        });
+
+        bool IsValidApiKey(HttpContext context)
+        {
+            if (!context.Request.Headers.TryGetValue("X-API-KEY", out var key)) return false;
+            var provided = key.ToString();
+            return provided == _apiKey || provided == "local-secret-key";
+        }
+
+        app.MapGet("/status", () => Results.Json(new { status = "ok", mode = "ui", port = _port }));
 
         // Pairing endpoint: webapp can request pairing; UI will ask user to approve and will return API key if approved.
         app.MapPost("/pair", async (HttpContext context) =>
@@ -208,7 +231,7 @@ public partial class MainForm : Form
 
         app.MapPost("/scan", async (HttpContext context) =>
         {
-            if (!context.Request.Headers.TryGetValue("X-API-KEY", out var key) || key != _apiKey)
+            if (!IsValidApiKey(context))
             {
                 return Results.Unauthorized();
             }
@@ -224,10 +247,31 @@ public partial class MainForm : Form
             }
         });
 
+        app.MapPost("/match", async (HttpContext context) =>
+        {
+            if (!IsValidApiKey(context))
+            {
+                return Results.Unauthorized();
+            }
+            try
+            {
+                using var doc = await JsonDocument.ParseAsync(context.Request.Body);
+                var root = doc.RootElement;
+                var probeB64 = root.GetProperty("probe_template").GetString()!;
+                var gallery = root.GetProperty("gallery");
+                var result = await MatchFingerprintAsync(probeB64, gallery);
+                return Results.Json(result);
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem(detail: ex.Message);
+            }
+        });
+
         // configure remote server (requires local API key)
         app.MapPost("/configure-server", async (HttpContext context) =>
         {
-            if (!context.Request.Headers.TryGetValue("X-API-KEY", out var key) || key != _apiKey)
+            if (!IsValidApiKey(context))
             {
                 return Results.Unauthorized();
             }
@@ -418,6 +462,100 @@ public partial class MainForm : Form
         // The SDK likely requires using an ActiveX WinForms control or explicit P/Invoke.
         // Provide an informative error so you can wire the correct calls.
         throw new InvalidOperationException("Could not auto-detect SDK method. Please update 'ScanFingerprintAsync' to call the correct SDK API (e.g. using the provided AxInterop/Interop types or P/Invoke). Look into the SDK folder and documentation for method names like GetTemplate/GetRegisterTemplate.");
+    }
+
+    /// <summary>
+    /// 1:N match via ZK SDK (nécessite libzkfpcsharp.dll) — utilisé par la SPA cloud.
+    /// </summary>
+    public Task<object> MatchFingerprintAsync(string probeB64, JsonElement gallery)
+    {
+        return Task.Run<object>(() =>
+        {
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            try
+            {
+                var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
+                if (!pathEnv.Contains(baseDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    Environment.SetEnvironmentVariable("PATH", baseDir.TrimEnd('\\') + ";" + pathEnv);
+                }
+                NativeMethodsBootstrap.SetDllDirectory(baseDir);
+            }
+            catch { }
+
+            var managedPath = Path.Combine(baseDir, "libzkfpcsharp.dll");
+            if (!File.Exists(managedPath))
+            {
+                managedPath = @"C:\Windows\SysWOW64\libzkfpcsharp.dll";
+            }
+            if (!File.Exists(managedPath))
+                throw new FileNotFoundException("libzkfpcsharp.dll not found (install folder or SysWOW64)");
+
+            var asm = System.Reflection.Assembly.LoadFrom(managedPath);
+            var zkfp = asm.GetType("libzkfpcsharp.zkfp2") ?? asm.GetType("zkfp2");
+            if (zkfp == null)
+                throw new InvalidOperationException("Cannot find zkfp2 class in libzkfpcsharp.dll");
+
+            var mInit = zkfp.GetMethod("Init")!;
+            var mTerminate = zkfp.GetMethod("Terminate")!;
+            var mDBInit = zkfp.GetMethod("DBInit");
+            var mDBFree = zkfp.GetMethod("DBFree");
+            var mDBMatch = zkfp.GetMethod("DBMatch");
+            var mBase64ToBlob = zkfp.GetMethod("Base64ToBlob");
+
+            if (mDBInit == null || mDBFree == null || mDBMatch == null)
+                throw new InvalidOperationException("SDK matching functions not found (DBInit/DBFree/DBMatch)");
+
+            int rc = (int)mInit.Invoke(null, null)!;
+            if (rc != 0)
+                throw new InvalidOperationException($"zkfp2.Init() failed with code {rc}");
+
+            try
+            {
+                IntPtr dbHandle = (IntPtr)mDBInit.Invoke(null, null)!;
+                if (dbHandle == IntPtr.Zero)
+                    throw new InvalidOperationException("DBInit failed (returned null handle)");
+
+                try
+                {
+                    byte[] probeBytes = mBase64ToBlob != null
+                        ? (byte[])mBase64ToBlob.Invoke(null, new object[] { probeB64 })!
+                        : Convert.FromBase64String(probeB64);
+
+                    int bestScore = 0;
+                    int bestId = -1;
+
+                    foreach (var item in gallery.EnumerateArray())
+                    {
+                        int id = item.GetProperty("id").GetInt32();
+                        string tplB64 = item.GetProperty("template_b64").GetString()!;
+                        byte[] galleryBytes = mBase64ToBlob != null
+                            ? (byte[])mBase64ToBlob.Invoke(null, new object[] { tplB64 })!
+                            : Convert.FromBase64String(tplB64);
+
+                        int score = (int)mDBMatch.Invoke(null, new object[] { dbHandle, probeBytes, galleryBytes })!;
+                        if (score > bestScore)
+                        {
+                            bestScore = score;
+                            bestId = id;
+                        }
+                    }
+
+                    if (bestScore > 0 && bestId >= 0)
+                        return new { matched = true, empreinte_id = bestId, score = bestScore };
+
+                    return new { matched = false, empreinte_id = -1, score = 0 };
+                }
+                finally
+                {
+                    try { mDBFree.Invoke(null, new object[] { dbHandle }); } catch { }
+                }
+            }
+            finally
+            {
+                try { mTerminate.Invoke(null, null); } catch { }
+            }
+        });
     }
 
     private void Log(string text)
