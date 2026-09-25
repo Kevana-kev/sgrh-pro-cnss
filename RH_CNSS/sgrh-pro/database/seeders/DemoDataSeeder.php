@@ -232,7 +232,7 @@ class DemoDataSeeder extends Seeder
                 EmployeeSkill::updateOrCreate(
                     ['employee_id' => $emp->id, 'skill_id' => $skillId],
                     [
-                        'level' => ['Débutant', 'Intermédiaire', 'Avancé', 'Expert'][rand(0, 3)],
+                        'level' => rand(1, 4),
                         'certified_at' => rand(0, 1) ? now()->subMonths(rand(1, 18)) : null,
                     ]
                 );
