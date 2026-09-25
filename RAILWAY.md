@@ -1,47 +1,31 @@
 # Déploiement Railway — SGRH Pro
-# Repo : https://github.com/Kevana-kev/sgrh-pro-cnss
 
-## Erreur « Railpack could not determine how to build »
+**App en ligne :** https://sgrh-pro-cnss-production.up.railway.app  
+**Repo :** https://github.com/Kevana-kev/sgrh-pro-cnss  
+**Projet Railway :** `alluring-vitality` / service `sgrh-pro-cnss`
 
-Railway analyse la **racine** du monorepo (MEMOIRE, scripts…) et ne trouve pas Laravel.
-**Correction poussée** : `railpack.json` + `composer.json` + `start.sh` à la racine.
+## Configuration qui fonctionne
 
-## Action OBLIGATOIRE dans l’interface Railway
+| Setting | Valeur |
+|---------|--------|
+| Root Directory | `RH_CNSS` |
+| Builder | Dockerfile |
+| Dockerfile | `Dockerfile` (racine du repo, chemins relatifs à `RH_CNSS/`) |
+| MySQL | plugin Railway attaché |
 
-### Option A (recommandée) — Root Directory
+Le Dockerfile racine fait `COPY sgrh-pro/ /app/` car le contexte Docker = dossier `RH_CNSS`.
 
-1. Service `sgrh-pro-cnss` → **Settings**
-2. **Root Directory** = `RH_CNSS/sgrh-pro`
-3. **Builder** = Railpack **ou** Dockerfile
-4. **Redeploy**
-
-Avec ce Root Directory, Railway ne voit que l’app Laravel.
-
-### Option B — Docker à la racine
-
-1. Settings → **Builder** = **Dockerfile** (pas Railpack)
-2. Dockerfile path = `Dockerfile`
-3. Root Directory = **vide**
-4. Redeploy
-
-### Variables (toujours)
+## Variables requises
 
 | Variable | Valeur |
 |----------|--------|
-| `APP_KEY` | `base64:E5ke1YNgPSEspJIu085MZspWZB48ko2Bb5HRkuvkawk=` |
+| `APP_KEY` | (généré, déjà défini sur Railway) |
 | `APP_ENV` | `production` |
 | `APP_DEBUG` | `false` |
-| `APP_URL` | URL `.up.railway.app` |
-| `DB_CONNECTION` | `mysql` |
-| `DB_HOST` | `${{MySQL.MYSQLHOST}}` |
-| `DB_PORT` | `${{MySQL.MYSQLPORT}}` |
-| `DB_DATABASE` | `${{MySQL.MYSQLDATABASE}}` |
-| `DB_USERNAME` | `${{MySQL.MYSQLUSER}}` |
-| `DB_PASSWORD` | `${{MySQL.MYSQLPASSWORD}}` |
-| `SEED_ON_BOOT` | `true` puis `false` |
-
-Ajoute aussi un plugin **MySQL**.
+| `APP_URL` | `https://sgrh-pro-cnss-production.up.railway.app` |
+| `DB_*` | refs `${{MySQL.*}}` |
+| `SEED_ON_BOOT` | `false` (mettre `true` une fois pour recharger la démo) |
 
 ## Limite
 
-ZK-9500 (USB) ne tourne pas sur Railway.
+Le bridge empreinte ZK-9500 (USB Windows) **ne tourne pas** sur Railway — biométrie locale uniquement.
