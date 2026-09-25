@@ -1,3 +1,4 @@
+# Fallback si Root Directory = RH_CNSS
 FROM php:8.4-cli-bookworm
 
 ENV COMPOSER_ALLOW_SUPERUSER=1
@@ -11,11 +12,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
 
-COPY composer.json composer.lock ./
-RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+COPY sgrh-pro/ /app/
 
-COPY . .
-RUN composer dump-autoload --optimize \
+RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts \
     && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache \
     && (test -f docker/railway-start.sh && cp docker/railway-start.sh /usr/local/bin/railway-start.sh || cp start.sh /usr/local/bin/railway-start.sh) \

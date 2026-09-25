@@ -1,0 +1,11 @@
+.git
+**/.env
+!**/.env.example
+**/vendor
+**/node_modules
+fingerprint-service
+fingerprint_service
+legacy
+**/.vs
+**/storage/logs/*
+**/database/*.sqlite

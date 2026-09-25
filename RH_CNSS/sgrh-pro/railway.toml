@@ -1,12 +1,11 @@
-# Railway — SGRH Pro (Laravel)
-# Dans Railway : Root Directory = RH_CNSS/sgrh-pro
-
+# Railway — Laravel app (Root Directory = RH_CNSS/sgrh-pro)
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
 healthcheckPath = "/up"
-healthcheckTimeout = 100
+healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
+startCommand = "/usr/local/bin/railway-start.sh"

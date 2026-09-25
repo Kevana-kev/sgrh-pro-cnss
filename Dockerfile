@@ -1,4 +1,4 @@
-# Build monorepo → Laravel app
+# Build avec Root Directory Railway = RH_CNSS (contexte = RH_CNSS/)
 FROM php:8.4-cli-bookworm
 
 ENV COMPOSER_ALLOW_SUPERUSER=1
@@ -12,8 +12,8 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
 
-# Copier toute l'app Laravel d'abord (contexte = racine du repo)
-COPY RH_CNSS/sgrh-pro/ /app/
+# Contexte Docker = RH_CNSS/ (voir Root Directory Railway)
+COPY sgrh-pro/ /app/
 
 RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts \
     && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
