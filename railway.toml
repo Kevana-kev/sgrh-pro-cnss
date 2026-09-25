@@ -1,0 +1,12 @@
+# Config Railway à la racine du dépôt
+# Force Docker (évite Railpack qui échoue sur un monorepo)
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/up"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
