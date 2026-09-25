@@ -5,10 +5,12 @@
 #>
 [CmdletBinding()]
 param(
-  [string]$InstallDir = "$env:ProgramFiles\SGRH Pro\FingerprintBridge",
+  # LocalAppData = moins de conflits ACL / antivirus que Program Files
+  [string]$InstallDir = "$env:LOCALAPPDATA\SGRH Pro\FingerprintBridge",
   [string]$ApiKey = "local-secret-key",
   [int]$Port = 5002,
-  [switch]$NoStart
+  [switch]$NoStart,
+  [switch]$InPlace
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,6 +21,7 @@ $LogDir = Join-Path $env:ProgramData "SGRH Pro\FingerprintBridge"
 $ConfigPath = Join-Path $LogDir "bridge.config.json"
 $TaskName = "SGRH Fingerprint Bridge"
 $LauncherName = "Start-SgrhBridge.cmd"
+$script:EffectiveInstallDir = $InstallDir
 
 function Write-Step {
   param([string]$Message)
@@ -27,7 +30,9 @@ function Write-Step {
 }
 
 function Assert-Payload {
-  if (-not (Test-Path (Join-Path $Payload "FingerprintBridge.dll"))) {
+  $dll = Join-Path $Payload "FingerprintBridge.dll"
+  $exe = Join-Path $Payload "FingerprintBridge.exe"
+  if (-not (Test-Path $dll) -and -not (Test-Path $exe)) {
     throw "Payload introuvable. Lance d'abord Build-Payload.ps1 (dossier installer\payload)."
   }
 }
@@ -36,92 +41,133 @@ function Stop-OldBridge {
   Write-Step "Arret des instances bridge existantes"
   $prevEap = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
+
   cmd /c "taskkill /F /IM FingerprintBridge.exe >nul 2>&1"
-  Get-Process -Name "FingerprintBridge" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+  cmd /c "taskkill /F /IM FingerprintBridge.dll >nul 2>&1"
+
+  Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
+    $p = $_
+    try {
+      $path = $p.Path
+      if ($path -and (
+          $path -like "*FingerprintBridge*" -or
+          $path -like "*SGRH Pro*" -or
+          $path -like "*fingerprint-service*payload*"
+        )) {
+        Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+      }
+    } catch {}
+  }
+
   Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | ForEach-Object {
     try { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } catch {}
   }
+
   $ErrorActionPreference = $prevEap
-  Start-Sleep -Seconds 2
+  Start-Sleep -Seconds 3
+}
+
+function Test-BridgeBinaries {
+  param([string]$Dir)
+  return (Test-Path (Join-Path $Dir "FingerprintBridge.exe")) -or
+         (Test-Path (Join-Path $Dir "FingerprintBridge.dll"))
 }
 
 function Copy-Payload {
-  Write-Step "Copie des fichiers vers $InstallDir"
+  Write-Step "Preparation du dossier d'installation"
   Stop-OldBridge
   New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+
+  if ($InPlace) {
+    $script:EffectiveInstallDir = $Payload
+    Write-Host "  Mode in-place: utilisation directe de $Payload" -ForegroundColor Yellow
+    return
+  }
 
   $prevEap = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
 
-  if (Test-Path $InstallDir) {
-    $backup = "$InstallDir.bak_" + (Get-Date -Format "yyyyMMdd_HHmmss")
+  # Deplacer l'ancienne install si presente
+  if (Test-Path $script:EffectiveInstallDir) {
+    $backup = "$($script:EffectiveInstallDir).bak_" + (Get-Date -Format "yyyyMMdd_HHmmss")
     try {
-      Move-Item -Path $InstallDir -Destination $backup -Force -ErrorAction Stop
-      Write-Host "  Ancienne install deplacee: $backup" -ForegroundColor DarkGray
+      Move-Item -Path $script:EffectiveInstallDir -Destination $backup -Force -ErrorAction Stop
+      Write-Host "  Ancienne install deplacee" -ForegroundColor DarkGray
     } catch {
-      Get-ChildItem -Path $InstallDir -Force -ErrorAction SilentlyContinue | ForEach-Object {
-        try { Remove-Item $_.FullName -Recurse -Force -ErrorAction Stop } catch {
-          try { Rename-Item $_.FullName ($_.FullName + ".old") -Force } catch {}
-        }
-      }
+      try { Remove-Item $script:EffectiveInstallDir -Recurse -Force -ErrorAction SilentlyContinue } catch {}
     }
   }
 
-  New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+  New-Item -ItemType Directory -Force -Path $script:EffectiveInstallDir | Out-Null
   Get-ChildItem -Path $Payload -Recurse -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue
 
-  # IMPORTANT: exclure les DLL natives ZK (souvent verrouillees / bloquees Defender)
-  & robocopy $Payload $InstallDir /E /R:1 /W:1 /NFL /NDL /NJH /NJS `
+  # Etape 1: staging dans %TEMP% (evite locks Program Files)
+  $stage = Join-Path $env:TEMP ("sgrh-bridge-stage-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
+  New-Item -ItemType Directory -Force -Path $stage | Out-Null
+
+  Write-Host "  Staging: $stage" -ForegroundColor DarkGray
+  & robocopy $Payload $stage /E /R:0 /W:0 /NFL /NDL /NJH /NJS `
     /XD BiometricFinEnrolmentVerificationZkteco bridge standalone RegisterTool obj bin `
-    /XF libzkfpcsharp.dll libzkfp.dll zkfp.dll libzkfpadapter.dll *.pdb
-  $rc = $LASTEXITCODE
+    /XF libzkfpcsharp.dll libzkfp.dll zkfp.dll libzkfpadapter.dll *.pdb | Out-Null
+  $rc1 = $LASTEXITCODE
+
+  # Etape 2: staging -> install
+  & robocopy $stage $script:EffectiveInstallDir /E /R:1 /W:1 /NFL /NDL /NJH /NJS | Out-Null
+  $rc2 = $LASTEXITCODE
+
+  try { Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+
   $ErrorActionPreference = $prevEap
 
-  if ($rc -ge 8) {
-    throw "Echec copie payload (robocopy code $rc)."
+  if (Test-BridgeBinaries $script:EffectiveInstallDir) {
+    if ($rc1 -ge 8 -or $rc2 -ge 8) {
+      Write-Host "  Copie partielle OK (binaires presents)." -ForegroundColor Yellow
+    }
+    return
   }
 
-  if (-not (Test-Path (Join-Path $InstallDir "FingerprintBridge.dll")) -and
-      -not (Test-Path (Join-Path $InstallDir "FingerprintBridge.exe"))) {
-    throw "Copie incomplete: FingerprintBridge.exe/dll introuvable dans $InstallDir"
+  # Fallback ultime: installer in-place depuis payload (fichiers deja la)
+  Write-Host "  Copie impossible (fichiers verrouilles). Fallback in-place payload." -ForegroundColor Yellow
+  $script:EffectiveInstallDir = $Payload
+  if (-not (Test-BridgeBinaries $script:EffectiveInstallDir)) {
+    throw "Impossible d'installer: FingerprintBridge.exe/dll inaccessibles (ferme le bridge / antivirus)."
   }
 }
 
 function Install-ZkSdkFiles {
   Write-Step "Integration SDK ZKTeco"
+  $dir = $script:EffectiveInstallDir
   $targets = @()
-  $searchDirs = @(
-    $VendorZk,
-    $Payload,
-    (Join-Path $env:windir "SysWOW64")
-  )
+  $searchDirs = @($VendorZk, $Payload, (Join-Path $env:windir "SysWOW64"), $dir)
 
   foreach ($name in @("libzkfpcsharp.dll", "libzkfp.dll", "zkfp.dll", "libzkfpadapter.dll")) {
+    $dest = Join-Path $dir $name
+    if (Test-Path $dest) {
+      $targets += "$name (ok)"
+      continue
+    }
+
     $srcFile = $null
-    foreach ($dir in $searchDirs) {
-      $candidate = Join-Path $dir $name
-      if (Test-Path $candidate) {
+    foreach ($d in $searchDirs) {
+      $candidate = Join-Path $d $name
+      if ((Test-Path $candidate) -and ($candidate -ne $dest)) {
         $srcFile = $candidate
         break
       }
     }
     if (-not $srcFile) { continue }
 
-    $dest = Join-Path $InstallDir $name
     try {
       Unblock-File -Path $srcFile -ErrorAction SilentlyContinue
       Copy-Item -LiteralPath $srcFile -Destination $dest -Force -ErrorAction Stop
       $targets += $name
     } catch {
-      Write-Host ("  [!] Impossible de copier $name depuis $srcFile") -ForegroundColor Yellow
-      Write-Host ("      " + $_.Exception.Message) -ForegroundColor Yellow
-      if (Test-Path $dest) { $targets += "$name (deja present)" }
+      Write-Host ("  [!] $name non copie: " + $_.Exception.Message) -ForegroundColor Yellow
     }
   }
 
   if ($targets.Count -eq 0) {
-    Write-Host "  [!] Aucune DLL ZK trouvee." -ForegroundColor Yellow
-    Write-Host "      Place libzkfpcsharp.dll / libzkfp.dll dans: $VendorZk" -ForegroundColor Yellow
+    Write-Host "  [!] Aucune DLL ZK trouvee. Place-les dans: $VendorZk" -ForegroundColor Yellow
     return $false
   }
 
@@ -131,12 +177,13 @@ function Install-ZkSdkFiles {
 
 function Write-Config {
   Write-Step "Configuration bridge (cle API + port)"
+  $dir = $script:EffectiveInstallDir
   $cfg = [ordered]@{
     apiKey      = $ApiKey
     port        = $Port
     forceDevice = $true
     allowMock   = $false
-    installDir  = $InstallDir
+    installDir  = $dir
     installedAt = (Get-Date).ToString("o")
     laravelHint = "BIOMETRIC_BRIDGE_URL=http://127.0.0.1:$Port ; BIOMETRIC_BRIDGE_API_KEY=$ApiKey"
   }
@@ -146,18 +193,19 @@ function Write-Config {
   [Environment]::SetEnvironmentVariable("FINGERPRINT_BRIDGE_FORCE_DEVICE", "1", "Machine")
   [Environment]::SetEnvironmentVariable("FINGERPRINT_BRIDGE_ALLOW_MOCK", "0", "Machine")
   [Environment]::SetEnvironmentVariable("FINGERPRINT_BRIDGE_PORT", "$Port", "Machine")
+  [Environment]::SetEnvironmentVariable("SGRH_BRIDGE_INSTALL_DIR", $dir, "Machine")
 
   $env:FINGERPRINT_BRIDGE_API_KEY = $ApiKey
   $env:FINGERPRINT_BRIDGE_FORCE_DEVICE = "1"
   $env:FINGERPRINT_BRIDGE_ALLOW_MOCK = "0"
 
-  $appData = Join-Path $env:ProgramData "FingerprintBridge"
-  New-Item -ItemType Directory -Force -Path $appData | Out-Null
+  New-Item -ItemType Directory -Force -Path (Join-Path $env:ProgramData "FingerprintBridge") | Out-Null
 }
 
 function Write-ProtocolHandler {
-  Write-Step "Enregistrement protocole web sgrhbridge:// (lancement depuis le site)"
-  $exe = Join-Path $InstallDir "FingerprintBridge.exe"
+  Write-Step "Enregistrement protocole web sgrhbridge://"
+  $dir = $script:EffectiveInstallDir
+  $exe = Join-Path $dir "FingerprintBridge.exe"
   if (-not (Test-Path $exe)) {
     Write-Host "  [!] FingerprintBridge.exe introuvable - protocole non enregistre." -ForegroundColor Yellow
     return
@@ -173,23 +221,20 @@ function Write-ProtocolHandler {
     } else {
       Set-ItemProperty -Path $root -Name "URL Protocol" -Value "" -Force
     }
-
-    $iconPath = Join-Path $root "DefaultIcon"
-    New-Item -Path $iconPath -Force | Out-Null
-    Set-ItemProperty -Path $iconPath -Name "(default)" -Value ('"' + $exe + '",0') -Force
-
-    $cmdPath = Join-Path $root "shell\open\command"
-    New-Item -Path $cmdPath -Force | Out-Null
-    Set-ItemProperty -Path $cmdPath -Name "(default)" -Value $command -Force
+    New-Item -Path (Join-Path $root "DefaultIcon") -Force | Out-Null
+    Set-ItemProperty -Path (Join-Path $root "DefaultIcon") -Name "(default)" -Value ('"' + $exe + '",0') -Force
+    New-Item -Path (Join-Path $root "shell\open\command") -Force | Out-Null
+    Set-ItemProperty -Path (Join-Path $root "shell\open\command") -Name "(default)" -Value $command -Force
   }
 
   [Environment]::SetEnvironmentVariable("SGRH_BRIDGE_PROTOCOL", "sgrhbridge", "Machine")
-  Write-Host "  Protocoles: sgrhbridge:// et sgrh-fingerprint://" -ForegroundColor Green
+  Write-Host "  Protocoles OK -> $exe" -ForegroundColor Green
 }
 
 function Write-Launcher {
   Write-Step "Creation du lanceur headless"
-  $launcher = Join-Path $InstallDir $LauncherName
+  $dir = $script:EffectiveInstallDir
+  $launcher = Join-Path $dir $LauncherName
 
   $cmdLines = @(
     "@echo off",
@@ -197,7 +242,7 @@ function Write-Launcher {
     "set FINGERPRINT_BRIDGE_API_KEY=$ApiKey",
     "set FINGERPRINT_BRIDGE_FORCE_DEVICE=1",
     "set FINGERPRINT_BRIDGE_ALLOW_MOCK=0",
-    ('cd /d "' + $InstallDir + '"'),
+    ('cd /d "' + $dir + '"'),
     'if exist "FingerprintBridge.exe" (',
     '  start "SGRH Fingerprint Bridge" /MIN FingerprintBridge.exe --headless',
     ") else (",
@@ -208,36 +253,29 @@ function Write-Launcher {
   Set-Content -Path $launcher -Value ($cmdLines -join "`r`n") -Encoding ASCII
 
   $wsh = New-Object -ComObject WScript.Shell
-  $startup = [Environment]::GetFolderPath("CommonStartup")
-  $desk = [Environment]::GetFolderPath("CommonDesktopDirectory")
-  $startMenu = Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\SGRH Pro"
+  $startup = [Environment]::GetFolderPath("Startup")
+  $desk = [Environment]::GetFolderPath("Desktop")
+  $startMenu = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\SGRH Pro"
   New-Item -ItemType Directory -Force -Path $startMenu | Out-Null
 
-  $shortcuts = @(
-    @{ Path = (Join-Path $startup "SGRH Fingerprint Bridge.lnk"); Desc = "Demarrage auto" },
-    @{ Path = (Join-Path $startMenu "Demarrer Fingerprint Bridge.lnk"); Desc = "Lancer le bridge" },
-    @{ Path = (Join-Path $desk "SGRH Fingerprint Bridge.lnk"); Desc = "Lancer le bridge" }
-  )
-
-  foreach ($pair in $shortcuts) {
+  foreach ($pair in @(
+      @{ Path = (Join-Path $startup "SGRH Fingerprint Bridge.lnk"); Desc = "Demarrage auto" },
+      @{ Path = (Join-Path $startMenu "Demarrer Fingerprint Bridge.lnk"); Desc = "Lancer" },
+      @{ Path = (Join-Path $desk "SGRH Fingerprint Bridge.lnk"); Desc = "Bureau" }
+    )) {
     $sc = $wsh.CreateShortcut($pair.Path)
     $sc.TargetPath = $launcher
-    $sc.WorkingDirectory = $InstallDir
-    $sc.Description = "SGRH Pro - Bridge biometrique ZK-9500 ($($pair.Desc))"
+    $sc.WorkingDirectory = $dir
+    $sc.Description = "SGRH Pro Bridge ZK-9500 ($($pair.Desc))"
     $sc.Save()
   }
 
   $prevEap = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
   cmd /c "schtasks /Delete /TN `"$TaskName`" /F >nul 2>&1"
-  cmd /c "schtasks /Create /TN `"$TaskName`" /SC ONLOGON /RL HIGHEST /TR `"\"$launcher\"`" /F >nul 2>&1"
-  $taskOk = ($LASTEXITCODE -eq 0)
+  cmd /c "schtasks /Create /TN `"$TaskName`" /SC ONLOGON /RL LIMITED /TR `"\"$launcher\"`" /F >nul 2>&1"
   $ErrorActionPreference = $prevEap
-  if ($taskOk) {
-    Write-Host "  Tache planifiee: $TaskName" -ForegroundColor Green
-  } else {
-    Write-Host "  [!] Tache planifiee non creee (raccourci Startup suffit)." -ForegroundColor Yellow
-  }
+  Write-Host "  Lanceur: $launcher" -ForegroundColor Green
 }
 
 function Set-FirewallRule {
@@ -254,21 +292,27 @@ function Start-Bridge {
   if ($NoStart) { return }
   Write-Step "Demarrage du bridge"
   Stop-OldBridge
-  $launcher = Join-Path $InstallDir $LauncherName
-  Start-Process -FilePath $launcher -WorkingDirectory $InstallDir
-  Start-Sleep -Seconds 3
+  $launcher = Join-Path $script:EffectiveInstallDir $LauncherName
+  if (-not (Test-Path $launcher)) {
+    Write-Host "  Lanceur introuvable." -ForegroundColor Yellow
+    return
+  }
+  Start-Process -FilePath $launcher -WorkingDirectory $script:EffectiveInstallDir
+  Start-Sleep -Seconds 4
   try {
     $status = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/status" -TimeoutSec 5
     Write-Host ("  Bridge OK: " + ($status | ConvertTo-Json -Compress)) -ForegroundColor Green
   } catch {
-    Write-Host ("  Bridge demarre mais /status pas encore joignable: " + $_.Exception.Message) -ForegroundColor Yellow
-    Write-Host "  Verifie le lecteur ZK-9500 et les DLL SDK." -ForegroundColor Yellow
+    Write-Host ("  Bridge demarre mais /status pas joignable: " + $_.Exception.Message) -ForegroundColor Yellow
   }
 }
 
 function Write-Uninstaller {
-  $un = Join-Path $InstallDir "Uninstall-SgrhBridge.ps1"
-  Copy-Item (Join-Path $Root "Uninstall-SgrhBridge.ps1") $un -Force -ErrorAction SilentlyContinue
+  $src = Join-Path $Root "Uninstall-SgrhBridge.ps1"
+  $dst = Join-Path $script:EffectiveInstallDir "Uninstall-SgrhBridge.ps1"
+  if ((Test-Path $src) -and ($script:EffectiveInstallDir -ne $Payload)) {
+    Copy-Item $src $dst -Force -ErrorAction SilentlyContinue
+  }
 }
 
 Write-Host "============================================" -ForegroundColor Green
@@ -287,16 +331,13 @@ Start-Bridge
 
 Write-Host ""
 Write-Host "INSTALLATION TERMINEE" -ForegroundColor Green
-Write-Host "  Dossier     : $InstallDir"
+Write-Host "  Dossier     : $($script:EffectiveInstallDir)"
 Write-Host "  Config      : $ConfigPath"
 Write-Host "  API Key     : $ApiKey"
 Write-Host "  URL bridge  : http://127.0.0.1:$Port"
-Write-Host "  Protocole   : sgrhbridge://start  (clic Empreinte sur le site web)"
-Write-Host "  Laravel .env: BIOMETRIC_BRIDGE_API_KEY=$ApiKey"
+Write-Host "  Protocole   : sgrhbridge://start"
 if (-not $zkOk) {
   Write-Host ""
-  Write-Host "ACTION REQUISE: copie les DLL ZKFinger dans:" -ForegroundColor Yellow
-  Write-Host "  $VendorZk" -ForegroundColor Yellow
-  Write-Host "  puis relance cet installateur." -ForegroundColor Yellow
+  Write-Host "ACTION REQUISE: DLL ZK dans $VendorZk puis relancer." -ForegroundColor Yellow
 }
 Write-Host ""
