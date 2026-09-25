@@ -17,3 +17,7 @@ RH_CNSS/legacy
 **/.vs
 **/storage/logs/*
 **/database/*.sqlite
+*.md
+composer.json
+railpack.json
+start.sh

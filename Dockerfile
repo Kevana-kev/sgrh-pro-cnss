@@ -1,4 +1,4 @@
-# Build depuis la racine du repo GitHub (Railway n'a pas besoin de Root Directory)
+# Build monorepo → Laravel app
 FROM php:8.4-cli-bookworm
 
 ENV COMPOSER_ALLOW_SUPERUSER=1
@@ -12,17 +12,16 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
 
-COPY RH_CNSS/sgrh-pro/composer.json RH_CNSS/sgrh-pro/composer.lock ./
-RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+# Copier toute l'app Laravel d'abord (contexte = racine du repo)
+COPY RH_CNSS/sgrh-pro/ /app/
 
-COPY RH_CNSS/sgrh-pro/ ./
-RUN composer dump-autoload --optimize \
+RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts \
     && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache \
+    && (test -f docker/railway-start.sh && cp docker/railway-start.sh /usr/local/bin/railway-start.sh || cp start.sh /usr/local/bin/railway-start.sh) \
+    && sed -i 's/\r$//' /usr/local/bin/railway-start.sh \
+    && chmod +x /usr/local/bin/railway-start.sh \
     && php artisan package:discover --ansi || true
-
-COPY RH_CNSS/sgrh-pro/docker/railway-start.sh /usr/local/bin/railway-start.sh
-RUN sed -i 's/\r$//' /usr/local/bin/railway-start.sh && chmod +x /usr/local/bin/railway-start.sh
 
 EXPOSE 8000
 CMD ["/usr/local/bin/railway-start.sh"]
