@@ -2,9 +2,6 @@
 <#
 .SYNOPSIS
   Installation one-touch - SGRH Pro Fingerprint Bridge (Windows)
-.DESCRIPTION
-  Installe le bridge ZK-9500, configure la cle API, demarre au logon,
-  regle le pare-feu localhost et lance le service immediatement.
 #>
 [CmdletBinding()]
 param(
@@ -37,59 +34,49 @@ function Assert-Payload {
 
 function Stop-OldBridge {
   Write-Step "Arret des instances bridge existantes"
-  Get-Process -Name "FingerprintBridge","dotnet" -ErrorAction SilentlyContinue | Where-Object {
-    try {
-      $_.Path -and ($_.Path -like "*FingerprintBridge*" -or $_.Path -like "*SGRH Pro*")
-    } catch {
-      $false
-    }
-  } | Stop-Process -Force -ErrorAction SilentlyContinue
-
-  Get-Process -Name "FingerprintBridge" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-
   $prevEap = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
+  cmd /c "taskkill /F /IM FingerprintBridge.exe >nul 2>&1"
+  Get-Process -Name "FingerprintBridge" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
   Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | ForEach-Object {
-    try {
-      Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
-    } catch {
-    }
+    try { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } catch {}
   }
   $ErrorActionPreference = $prevEap
-  Start-Sleep -Seconds 1
+  Start-Sleep -Seconds 2
 }
 
 function Copy-Payload {
   Write-Step "Copie des fichiers vers $InstallDir"
   Stop-OldBridge
-
-  New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
   New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
-  # Nettoyage cible (DLL souvent verrouillees si reinstall)
   $prevEap = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
+
   if (Test-Path $InstallDir) {
-    Get-ChildItem -Path $InstallDir -Force -ErrorAction SilentlyContinue | ForEach-Object {
-      try {
-        Remove-Item $_.FullName -Recurse -Force -ErrorAction Stop
-      } catch {
-        # Fichier verrouille: renommer pour liberer le chemin
-        try {
-          $bak = $_.FullName + ".old_" + (Get-Date -Format "HHmmss")
-          Rename-Item $_.FullName $bak -Force -ErrorAction SilentlyContinue
-        } catch {
+    $backup = "$InstallDir.bak_" + (Get-Date -Format "yyyyMMdd_HHmmss")
+    try {
+      Move-Item -Path $InstallDir -Destination $backup -Force -ErrorAction Stop
+      Write-Host "  Ancienne install deplacee: $backup" -ForegroundColor DarkGray
+    } catch {
+      Get-ChildItem -Path $InstallDir -Force -ErrorAction SilentlyContinue | ForEach-Object {
+        try { Remove-Item $_.FullName -Recurse -Force -ErrorAction Stop } catch {
+          try { Rename-Item $_.FullName ($_.FullName + ".old") -Force } catch {}
         }
       }
     }
   }
+
+  New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+  Get-ChildItem -Path $Payload -Recurse -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue
+
+  # IMPORTANT: exclure les DLL natives ZK (souvent verrouillees / bloquees Defender)
+  & robocopy $Payload $InstallDir /E /R:1 /W:1 /NFL /NDL /NJH /NJS `
+    /XD BiometricFinEnrolmentVerificationZkteco bridge standalone RegisterTool obj bin `
+    /XF libzkfpcsharp.dll libzkfp.dll zkfp.dll libzkfpadapter.dll *.pdb
+  $rc = $LASTEXITCODE
   $ErrorActionPreference = $prevEap
 
-  # Copie robuste (exclut projets SDK inutiles)
-  & robocopy $Payload $InstallDir /E /R:3 /W:1 /NFL /NDL /NJH /NJS `
-    /XD BiometricFinEnrolmentVerificationZkteco bridge standalone RegisterTool obj bin
-  $rc = $LASTEXITCODE
-  # robocopy: 0-7 = succes partiel/ok, >=8 = erreur
   if ($rc -ge 8) {
     throw "Echec copie payload (robocopy code $rc)."
   }
@@ -103,44 +90,42 @@ function Copy-Payload {
 function Install-ZkSdkFiles {
   Write-Step "Integration SDK ZKTeco"
   $targets = @()
-  $candidates = @()
-
-  if (Test-Path $VendorZk) {
-    $candidates += Get-ChildItem $VendorZk -File -ErrorAction SilentlyContinue
-  }
+  $searchDirs = @(
+    $VendorZk,
+    $Payload,
+    (Join-Path $env:windir "SysWOW64")
+  )
 
   foreach ($name in @("libzkfpcsharp.dll", "libzkfp.dll", "zkfp.dll", "libzkfpadapter.dll")) {
-    $sys = Join-Path $env:windir "SysWOW64\$name"
-    if (Test-Path $sys) {
-      $candidates += Get-Item $sys
-    }
-  }
-
-  $copied = 0
-  foreach ($f in ($candidates | Sort-Object FullName -Unique)) {
-    if ($f.Extension -notin @(".dll", ".so")) {
-      continue
-    }
-    Copy-Item $f.FullName -Destination (Join-Path $InstallDir $f.Name) -Force
-    $wow = Join-Path $env:windir "SysWOW64\$($f.Name)"
-    if (-not (Test-Path $wow)) {
-      try {
-        Copy-Item $f.FullName -Destination $wow -Force
-      } catch {
+    $srcFile = $null
+    foreach ($dir in $searchDirs) {
+      $candidate = Join-Path $dir $name
+      if (Test-Path $candidate) {
+        $srcFile = $candidate
+        break
       }
     }
-    $copied++
-    $targets += $f.Name
+    if (-not $srcFile) { continue }
+
+    $dest = Join-Path $InstallDir $name
+    try {
+      Unblock-File -Path $srcFile -ErrorAction SilentlyContinue
+      Copy-Item -LiteralPath $srcFile -Destination $dest -Force -ErrorAction Stop
+      $targets += $name
+    } catch {
+      Write-Host ("  [!] Impossible de copier $name depuis $srcFile") -ForegroundColor Yellow
+      Write-Host ("      " + $_.Exception.Message) -ForegroundColor Yellow
+      if (Test-Path $dest) { $targets += "$name (deja present)" }
+    }
   }
 
-  if ($copied -eq 0) {
-    Write-Host "  [!] Aucune DLL ZK trouvee dans vendor\zk ni SysWOW64." -ForegroundColor Yellow
-    Write-Host "      Place les DLL du SDK ZKFinger dans: $VendorZk" -ForegroundColor Yellow
-    Write-Host "      Puis relance Setup-SgrhBridge.ps1" -ForegroundColor Yellow
+  if ($targets.Count -eq 0) {
+    Write-Host "  [!] Aucune DLL ZK trouvee." -ForegroundColor Yellow
+    Write-Host "      Place libzkfpcsharp.dll / libzkfp.dll dans: $VendorZk" -ForegroundColor Yellow
     return $false
   }
 
-  Write-Host "  DLL ZK copiees: $($targets -join ', ')" -ForegroundColor Green
+  Write-Host "  DLL ZK: $($targets -join ', ')" -ForegroundColor Green
   return $true
 }
 
@@ -183,7 +168,6 @@ function Write-ProtocolHandler {
   foreach ($root in @("HKLM:\SOFTWARE\Classes\sgrhbridge", "HKLM:\SOFTWARE\Classes\sgrh-fingerprint")) {
     New-Item -Path $root -Force | Out-Null
     Set-ItemProperty -Path $root -Name "(default)" -Value "URL:SGRH Fingerprint Bridge" -Force
-    New-ItemProperty -Path $root -Name "URL Protocol" -Value "" -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
     if (-not (Get-ItemProperty -Path $root -Name "URL Protocol" -ErrorAction SilentlyContinue)) {
       New-ItemProperty -Path $root -Name "URL Protocol" -Value "" -PropertyType String -Force | Out-Null
     } else {
@@ -243,7 +227,6 @@ function Write-Launcher {
     $sc.Save()
   }
 
-  # schtasks /Delete echoue si la tache n'existe pas -> ne pas stopper l'install
   $prevEap = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
   cmd /c "schtasks /Delete /TN `"$TaskName`" /F >nul 2>&1"
@@ -268,9 +251,7 @@ function Set-FirewallRule {
 }
 
 function Start-Bridge {
-  if ($NoStart) {
-    return
-  }
+  if ($NoStart) { return }
   Write-Step "Demarrage du bridge"
   Stop-OldBridge
   $launcher = Join-Path $InstallDir $LauncherName
@@ -286,8 +267,8 @@ function Start-Bridge {
 }
 
 function Write-Uninstaller {
-  $un = Join-Path $InstallDir "UnSetup-SgrhBridge.ps1"
-  Copy-Item (Join-Path $Root "UnSetup-SgrhBridge.ps1") $un -Force -ErrorAction SilentlyContinue
+  $un = Join-Path $InstallDir "Uninstall-SgrhBridge.ps1"
+  Copy-Item (Join-Path $Root "Uninstall-SgrhBridge.ps1") $un -Force -ErrorAction SilentlyContinue
 }
 
 Write-Host "============================================" -ForegroundColor Green
@@ -319,4 +300,3 @@ if (-not $zkOk) {
   Write-Host "  puis relance cet installateur." -ForegroundColor Yellow
 }
 Write-Host ""
-
