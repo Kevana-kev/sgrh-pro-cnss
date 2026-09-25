@@ -12,6 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Railway / reverse proxy HTTPS
+        $middleware->trustProxies(at: '*');
+
         $middleware->alias([
             'permission' => \App\Http\Middleware\EnsurePermission::class,
             'password.force' => \App\Http\Middleware\ForcePasswordChange::class,
