@@ -1,0 +1,13 @@
+LISTE DES FIGURES — CHAPITRE III
+================================
+
+fig_iii1_architecture_globale.png  — Architecture globale (applicatif + poste de pointage)
+fig_iii2_cas_utilisation.png       — Diagramme de cas d'utilisation
+fig_iii3_diagramme_classes.png     — Extrait du diagramme de classes métier
+fig_iii4_sequence_pointage.png     — Séquence pointage biométrique entrée/sortie
+fig_iii5_activite_conge.png        — Activité workflow de congé
+fig_iii6_deploiement.png           — Diagramme de déploiement
+fig_iii7_mer.png                   — Modèle entité-relation (extrait)
+fig_iii8_couches_backend.png       — Architecture en couches backend Laravel
+
+Génération : python MEMOIRE/generate_figures_ch3.py

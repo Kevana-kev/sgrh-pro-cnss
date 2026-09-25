@@ -1,0 +1,62 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.key
+auth.json
+
+# Dependencies
+node_modules/
+vendor/
+.venv/
+venv/
+env/
+
+# Laravel / runtime
+RH_CNSS/sgrh-pro/storage/*.key
+RH_CNSS/sgrh-pro/storage/logs/*.log
+RH_CNSS/sgrh-pro/storage/framework/cache/data/*
+RH_CNSS/sgrh-pro/storage/framework/sessions/*
+RH_CNSS/sgrh-pro/storage/framework/views/*
+RH_CNSS/sgrh-pro/bootstrap/cache/*.php
+RH_CNSS/sgrh-pro/public/hot
+RH_CNSS/sgrh-pro/public/storage
+RH_CNSS/sgrh-pro/database/*.sqlite
+RH_CNSS/sgrh-pro/database/*.sqlite-journal
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Large binaries / installers
+*.zip
+RH_CNSS/fingerprint-service/SGRH-FingerprintBridge-Setup-*.zip
+
+# Word lock / temp
+~$*
+*.tmp
+Thumbs.db
+.DS_Store
+
+# IDE / Visual Studio
+.idea/
+.vscode/
+.fleet/
+.zed/
+.cursor/
+**/.vs/
+*.suo
+*.user
+**/bin/
+**/obj/
+*.vsidx
+*.db
+*.mpack
+slnx.sqlite
+
+# Nested git backup (do not publish)
+RH_CNSS_git_backup/
+
+# OS
+desktop.ini

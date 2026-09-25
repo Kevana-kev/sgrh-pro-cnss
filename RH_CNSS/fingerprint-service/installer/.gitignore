@@ -1,0 +1,5 @@
+# Ignore build artifacts of the one-touch installer (keep vendor/zk README)
+payload/
+*.zip
+vendor/zk/*.dll
+!vendor/zk/README.txt

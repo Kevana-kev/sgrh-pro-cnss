@@ -1,0 +1,1 @@
+Conception et implémentation d'un système d'information intelligent de gestion des ressources humaines intégrant la biométrie (ZK-Teco 9500) et les cartes RFID pour le suivi et l'optimisation du personnel : cas de la CNSS

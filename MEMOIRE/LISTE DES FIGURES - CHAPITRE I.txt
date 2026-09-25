@@ -1,0 +1,11 @@
+LISTE DES FIGURES — CHAPITRE I
+
+Figure I.1 — Cycle de vie de l'agent couvert par un SIGRH intégré
+Figure I.2 — Évolution des générations de systèmes d'information RH
+Figure I.3 — Architecture fonctionnelle à trois couches d'un SIGRH
+Figure I.4 — Modèle de contrôle d'accès par rôles (RBAC) dans SGRH Pro
+Figure I.5 — Chaîne de transformation des données en aide à la décision RH
+Figure I.6 — Lecteur d'empreintes digitales ZK-9500 (poste RH)
+Figure I.7 — Carte RFID nominative et lecteur USB associé
+Figure I.8 — Processus d'enrôlement biométrique et de pointage dans SGRH Pro
+Figure I.9 — Architecture globale du système SGRH Pro

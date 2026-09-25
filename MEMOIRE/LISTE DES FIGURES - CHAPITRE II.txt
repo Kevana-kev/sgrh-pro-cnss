@@ -1,0 +1,11 @@
+LISTE DES FIGURES — CHAPITRE II
+
+Figure II.1 — Organigramme simplifié du siège central CNSS (focus DRH)
+Figure II.2 — Chaîne documentaire fragmentée du système actuel
+Figure II.3 — Comparaison entre pointage manuel et dispositif cible SGRH Pro
+Figure II.4 — Acteurs humains et composants techniques du système cible
+Figure II.5 — Workflow de validation d'une demande de congé
+Figure II.6 — Architecture modulaire des huit composants de SGRH Pro
+Figure II.7 — Graphe PERT / MPM du projet SGRH Pro
+Figure II.8 — Chemin critique du projet (63 jours ouvrés)
+Figure II.9 — Diagramme de Gantt du projet SGRH Pro

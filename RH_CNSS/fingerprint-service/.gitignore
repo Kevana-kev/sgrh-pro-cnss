@@ -1,0 +1,22 @@
+# Ignore SDK installer and large vendor files
+ZKFinger Standard SDK*/
+*.exe
+*.msi
+
+# Visual Studio / build outputs
+bin/
+obj/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# VS Code
+.vscode/
+
+# Generated interop assemblies
+Interop.*
+AxInterop.*
+
+# Local vendor SDK (do NOT commit vendor DLLs)
+vendor/

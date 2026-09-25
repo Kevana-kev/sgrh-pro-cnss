@@ -1,0 +1,178 @@
+Logiciel de Gestion des Ressources Humaines (GRH)
+Plan détaillé des fonctionnalités + Intégration Biométrique
+
+🏗️ ARCHITECTURE GÉNÉRALE DU SYSTÈME
+Le système comprend deux types d'utilisateurs :
+
+Les administrateurs / RH : accès complet à la gestion
+Les agents (employés) : oui, ils ont bien un compte dans le système avec un espace personnel limité
+
+
+👥 MODULE 1 — GESTION DES UTILISATEURS & ACCÈS
+1.1 Comptes Administrateurs / RH
+
+Création et gestion des comptes RH
+Rôles et permissions (Super Admin, RH, Manager, Superviseur)
+Journal d'audit (qui a fait quoi et quand)
+Authentification sécurisée (2FA possible)
+
+1.2 Comptes Agents (Employés) ✅
+Oui, chaque agent a un compte personnel avec accès à :
+
+Tableau de bord personnel
+Consultation de ses bulletins de paie
+Consultation de son solde de congés
+Soumission de demandes (congé, attestation, etc.)
+Visualisation de son planning / horaire
+Modification de ses informations personnelles (limitée)
+Historique de ses pointages
+
+
+👤 MODULE 2 — GESTION DES EMPLOYÉS (DOSSIER RH)
+
+Fiche employé complète (état civil, contact, photo)
+Numéro matricule unique
+Informations contractuelles (type de contrat, date d'embauche, poste)
+Département / Service / Direction d'affectation
+Niveau d'études & qualifications
+Historique des postes occupés
+Documents joints (CIN, diplômes, contrats scannés)
+Gestion des personnes à charge
+Statut (actif, suspendu, en congé, retraité, licencié)
+Archivage des dossiers
+
+
+🔐 MODULE 3 — INTÉGRATION BIOMÉTRIQUE (ZK-9500 + RFID)
+C'est le cœur de ton mémoire, voici les détails :
+3.1 Lecteur d'empreinte ZK-9500
+
+Enregistrement des empreintes digitales par employé
+Synchronisation avec la base de données du logiciel
+Authentification par empreinte pour le pointage
+Gestion des empreintes multiples par agent (ex. index + majeur)
+Détection des tentatives frauduleuses
+
+3.2 Cartes RFID
+
+Attribution d'une carte RFID unique par employé
+Enregistrement du code RFID dans le dossier employé
+Pointage par carte (alternative à l'empreinte)
+Gestion des cartes perdues / remplacées
+Désactivation à distance d'une carte
+
+3.3 Gestion des Pointages
+
+Enregistrement automatique heure d'entrée / sortie
+Détection des anomalies (oubli de pointage, pointage hors plage)
+Historique complet des pointages par employé
+Tableau de bord des présences en temps réel
+Alertes en cas d'absence non justifiée
+
+
+⏱️ MODULE 4 — GESTION DES PRÉSENCES & ABSENCES
+
+Calcul automatique des heures travaillées
+Détection des retards (avec seuil paramétrable)
+Gestion des absences justifiées / injustifiées
+Calcul des heures supplémentaires
+Rapport de présence journalier / hebdomadaire / mensuel
+Export des données (Excel, PDF)
+Alertes automatiques envoyées au manager
+
+
+📅 MODULE 5 — GESTION DES CONGÉS & PERMISSIONS
+
+Solde de congés par type (annuel, maladie, maternité, etc.)
+Demande de congé via l'espace agent (en ligne)
+Workflow de validation (Agent → Manager → RH)
+Calendrier des congés par équipe / service
+Planification des remplacements
+Gestion des jours fériés (paramétrable par pays)
+Historique des congés pris
+
+
+💰 MODULE 6 — GESTION DE LA PAIE
+
+Paramétrage des éléments de salaire (base, primes, indemnités)
+Calcul automatique du salaire brut / net
+Intégration des heures supplémentaires et absences
+Gestion des avances sur salaire
+Génération des bulletins de paie (PDF)
+Virements et modes de paiement
+Déclarations sociales et fiscales (CNSS, IRG, etc.)
+Historique de la paie par employé
+
+
+📊 MODULE 7 — GESTION DES CONTRATS
+
+Types de contrat (CDI, CDD, Stage, Intérim)
+Date de début / fin avec alertes d'expiration
+Renouvellement de contrat
+Gestion des périodes d'essai
+Avenants au contrat
+Archivage numérique des contrats signés
+
+
+🎓 MODULE 8 — FORMATION & COMPÉTENCES
+
+Catalogue de formations disponibles
+Inscription et suivi des formations par agent
+Évaluation post-formation
+Cartographie des compétences
+Plan de développement individuel (PDI)
+Certification et diplômes obtenus
+
+
+📈 MODULE 9 — ÉVALUATION DES PERFORMANCES
+
+Grilles d'évaluation paramétrables
+Évaluation annuelle / semestrielle
+Objectifs individuels (fixation et suivi)
+Évaluation 360° (N+1, pairs, auto-évaluation)
+Historique des évaluations
+Lien avec augmentation de salaire / promotion
+
+
+🏥 MODULE 10 — GESTION DES CONGÉS MÉDICAUX
+
+Déclaration d'arrêt maladie
+Suivi des certificats médicaux
+Calcul des indemnités journalières
+Historique médical RH (non-sensible)
+
+
+🔔 MODULE 11 — NOTIFICATIONS & ALERTES
+
+Alertes de fin de contrat
+Rappels d'anniversaires professionnels
+Notifications de demandes en attente
+Alertes d'absences anormales
+Notification par email / SMS / interface
+
+
+📋 MODULE 12 — RECRUTEMENT (optionnel)
+
+Création d'offres d'emploi
+Gestion des candidatures
+Suivi des entretiens
+Intégration du candidat sélectionné dans le système
+
+
+📉 MODULE 13 — TABLEAUX DE BORD & RAPPORTS
+
+Tableau de bord RH global (effectifs, absences, coûts)
+Rapport de masse salariale
+Rapport de présence / ponctualité
+Statistiques par département
+Indicateurs clés (KPI RH)
+Export PDF / Excel / CSV
+
+
+⚙️ MODULE 14 — PARAMÉTRAGE SYSTÈME
+
+Gestion de la structure organisationnelle (départements, postes)
+Configuration des horaires de travail et shifts
+Paramétrage des règles de pointage
+Personnalisation des types de congés
+Configuration des périphériques (ZK-9500, lecteurs RFID)
+Sauvegarde automatique de la base de données

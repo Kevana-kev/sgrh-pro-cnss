@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net7.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Exclude sub-projects and their obj/bin folders from compilation -->
+  <ItemGroup>
+    <Compile Remove="bridge\**" />
+    <Compile Remove="standalone\**" />
+    <Compile Remove="RegisterTool\**" />
+    <Compile Remove="BiometricFinEnrolmentVerificationZkteco\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Ensure ASP.NET Core is available for the local API host -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Copy ZKTeco interop assemblies from the provided SDK folder (if present) to the output -->
+    <!-- If the SDK interop DLLs exist in that path, copy them to output. Not required for build. -->
+    <None Include="BiometricFinEnrolmentVerificationZkteco\bin\Debug\Interop.ZKFPEngXControl.dll" Condition="Exists('BiometricFinEnrolmentVerificationZkteco\bin\Debug\Interop.ZKFPEngXControl.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="BiometricFinEnrolmentVerificationZkteco\bin\Debug\AxInterop.ZKFPEngXControl.dll" Condition="Exists('BiometricFinEnrolmentVerificationZkteco\bin\Debug\AxInterop.ZKFPEngXControl.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>

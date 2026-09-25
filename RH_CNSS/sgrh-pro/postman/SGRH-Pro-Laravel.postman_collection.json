@@ -1,0 +1,44 @@
+{
+  "info": {
+    "name": "SGRH Pro Laravel — Biométrie API",
+    "description": "Endpoints publics de pointage biométrique (Laravel). L'UI principale utilise des sessions web.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8000" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/up"
+      }
+    },
+    {
+      "name": "Check-in RFID",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rfid_card_id\": \"RFID-ADMIN-001\"\n}"
+        },
+        "url": "{{baseUrl}}/api/biometric/checkin/rfid"
+      }
+    },
+    {
+      "name": "Check-in empreinte",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"employee_id\": 1\n}"
+        },
+        "url": "{{baseUrl}}/api/biometric/checkin/fingerprint"
+      }
+    }
+  ]
+}
