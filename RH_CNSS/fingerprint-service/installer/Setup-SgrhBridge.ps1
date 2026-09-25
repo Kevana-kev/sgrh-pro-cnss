@@ -35,11 +35,69 @@ function Assert-Payload {
   }
 }
 
+function Stop-OldBridge {
+  Write-Step "Arret des instances bridge existantes"
+  Get-Process -Name "FingerprintBridge","dotnet" -ErrorAction SilentlyContinue | Where-Object {
+    try {
+      $_.Path -and ($_.Path -like "*FingerprintBridge*" -or $_.Path -like "*SGRH Pro*")
+    } catch {
+      $false
+    }
+  } | Stop-Process -Force -ErrorAction SilentlyContinue
+
+  Get-Process -Name "FingerprintBridge" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+  $prevEap = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | ForEach-Object {
+    try {
+      Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+    } catch {
+    }
+  }
+  $ErrorActionPreference = $prevEap
+  Start-Sleep -Seconds 1
+}
+
 function Copy-Payload {
   Write-Step "Copie des fichiers vers $InstallDir"
+  Stop-OldBridge
+
   New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
   New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
-  Copy-Item -Path (Join-Path $Payload "*") -Destination $InstallDir -Recurse -Force
+
+  # Nettoyage cible (DLL souvent verrouillees si reinstall)
+  $prevEap = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  if (Test-Path $InstallDir) {
+    Get-ChildItem -Path $InstallDir -Force -ErrorAction SilentlyContinue | ForEach-Object {
+      try {
+        Remove-Item $_.FullName -Recurse -Force -ErrorAction Stop
+      } catch {
+        # Fichier verrouille: renommer pour liberer le chemin
+        try {
+          $bak = $_.FullName + ".old_" + (Get-Date -Format "HHmmss")
+          Rename-Item $_.FullName $bak -Force -ErrorAction SilentlyContinue
+        } catch {
+        }
+      }
+    }
+  }
+  $ErrorActionPreference = $prevEap
+
+  # Copie robuste (exclut projets SDK inutiles)
+  & robocopy $Payload $InstallDir /E /R:3 /W:1 /NFL /NDL /NJH /NJS `
+    /XD BiometricFinEnrolmentVerificationZkteco bridge standalone RegisterTool obj bin
+  $rc = $LASTEXITCODE
+  # robocopy: 0-7 = succes partiel/ok, >=8 = erreur
+  if ($rc -ge 8) {
+    throw "Echec copie payload (robocopy code $rc)."
+  }
+
+  if (-not (Test-Path (Join-Path $InstallDir "FingerprintBridge.dll")) -and
+      -not (Test-Path (Join-Path $InstallDir "FingerprintBridge.exe"))) {
+    throw "Copie incomplete: FingerprintBridge.exe/dll introuvable dans $InstallDir"
+  }
 }
 
 function Install-ZkSdkFiles {
@@ -207,16 +265,6 @@ function Set-FirewallRule {
   cmd /c "netsh advfirewall firewall delete rule name=`"$rule`" >nul 2>&1"
   cmd /c "netsh advfirewall firewall add rule name=`"$rule`" dir=in action=allow protocol=TCP localport=$Port profile=any >nul 2>&1"
   $ErrorActionPreference = $prevEap
-}
-
-function Stop-OldBridge {
-  Get-Process -Name "FingerprintBridge" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-  Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | ForEach-Object {
-    try {
-      Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
-    } catch {
-    }
-  }
 }
 
 function Start-Bridge {
