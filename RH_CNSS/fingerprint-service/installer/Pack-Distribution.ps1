@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Cree une archive ZIP prete a deployer sur les PC CNSS (one-touch).
 #>
@@ -18,8 +18,8 @@ if (Test-Path $OutZip) { Remove-Item $OutZip -Force }
 
 Compress-Archive -Path @(
   (Join-Path $Root "INSTALLER.bat"),
-  (Join-Path $Root "Install-SgrhBridge.ps1"),
-  (Join-Path $Root "Uninstall-SgrhBridge.ps1"),
+  (Join-Path $Root "Setup-SgrhBridge.ps1"),
+  (Join-Path $Root "UnSetup-SgrhBridge.ps1"),
   (Join-Path $Root "Build-Payload.ps1"),
   (Join-Path $Root "README.md"),
   (Join-Path $Root "payload"),
@@ -28,3 +28,4 @@ Compress-Archive -Path @(
 
 Write-Host "Archive creee: $OutZip" -ForegroundColor Green
 Write-Host "Sur le PC cible: dezipper puis double-cliquer INSTALLER.bat" -ForegroundColor Cyan
+
