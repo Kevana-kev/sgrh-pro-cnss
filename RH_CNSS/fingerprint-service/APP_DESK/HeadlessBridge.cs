@@ -161,17 +161,23 @@ public class HeadlessBridge
         var builder = WebApplication.CreateBuilder();
         var app = builder.Build();
 
+        app.Urls.Add($"http://127.0.0.1:{_port}");
         app.Urls.Add($"http://localhost:{_port}");
 
-        // CORS : SPA hébergée (Railway HTTPS) → bridge local HTTP
+        // CORS + Private Network Access (Chrome : HTTPS Railway → http://127.0.0.1)
         app.Use(async (context, next) =>
         {
-            context.Response.Headers["Access-Control-Allow-Origin"] = context.Request.Headers.Origin.Count > 0
+            var origin = context.Request.Headers.Origin.Count > 0
                 ? context.Request.Headers.Origin.ToString()
                 : "*";
+            context.Response.Headers["Access-Control-Allow-Origin"] = origin;
             context.Response.Headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS";
-            context.Response.Headers["Access-Control-Allow-Headers"] = "Content-Type, X-API-KEY, Accept";
+            context.Response.Headers["Access-Control-Allow-Headers"] =
+                context.Request.Headers["Access-Control-Request-Headers"].Count > 0
+                    ? context.Request.Headers["Access-Control-Request-Headers"].ToString()
+                    : "Content-Type, X-API-KEY, Accept";
             context.Response.Headers["Access-Control-Allow-Credentials"] = "true";
+            context.Response.Headers["Access-Control-Allow-Private-Network"] = "true";
             if (HttpMethods.IsOptions(context.Request.Method))
             {
                 context.Response.StatusCode = StatusCodes.Status204NoContent;

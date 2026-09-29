@@ -3,13 +3,14 @@
  * Si le bridge est arrêté, déclenche sgrhbridge:// (installeur) puis attend le démarrage.
  */
 (function (global) {
-  const DEFAULT_URL = "http://127.0.0.1:5002";
+  const DEFAULT_URLS = ["http://127.0.0.1:5002", "http://localhost:5002"];
   const STORAGE_KEY = "sgrh_biometric_bridge_key";
   const PROTOCOL = "sgrhbridge://start";
 
-  function bridgeUrl() {
+  function configuredUrls() {
     const meta = document.querySelector('meta[name="biometric-bridge-url"]');
-    return (meta?.content || DEFAULT_URL).replace(/\/$/, "");
+    const primary = (meta?.content || DEFAULT_URLS[0]).replace(/\/$/, "");
+    return [...new Set([primary, ...DEFAULT_URLS])];
   }
 
   function configuredKey() {
@@ -41,7 +42,6 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  /** Lance le bridge installé via protocole custom (geste utilisateur requis). */
   function launchInstalledBridge() {
     try {
       const iframe = document.createElement("iframe");
@@ -68,12 +68,12 @@
     }
   }
 
-  async function fetchJson(path, options = {}) {
+  async function fetchJsonAt(baseUrl, path, options = {}) {
     const ctrl = new AbortController();
     const timeout = options.timeoutMs || 8000;
     const timer = setTimeout(() => ctrl.abort(), timeout);
     try {
-      const res = await fetch(`${bridgeUrl()}${path}`, {
+      const res = await fetch(`${baseUrl}${path}`, {
         ...options,
         signal: options.signal || ctrl.signal,
         headers: {
@@ -89,17 +89,29 @@
       } catch {
         data = { raw: text };
       }
-      return { res, data };
+      return { res, data, baseUrl };
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  async function fetchJson(path, options = {}) {
+    let lastErr = null;
+    for (const base of configuredUrls()) {
+      try {
+        return await fetchJsonAt(base, path, options);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr || new Error("Bridge local inaccessible");
   }
 
   async function status() {
     try {
       const { res, data } = await fetchJson("/status", { method: "GET", timeoutMs: 2500 });
       if (!res.ok) {
-        return { ok: false, status: "error", message: "Bridge local inaccessible" };
+        return { ok: false, status: "error", message: "Bridge local inaccessible (HTTP " + res.status + ")" };
       }
       return {
         ok: data.status === "ok" || res.ok,
@@ -107,22 +119,24 @@
         message: "Lecteur biométrique local connecté (port 5002)",
         connected: true,
       };
-    } catch {
+    } catch (e) {
+      const hint =
+        e?.name === "TypeError"
+          ? "Navigateur bloque l'accès au bridge (CORS/Private Network) ou bridge arrêté."
+          : "Bridge non détecté sur ce PC.";
       return {
         ok: false,
         status: "offline",
         connected: false,
         message:
-          "Bridge non détecté — installation SGRH Fingerprint Bridge requise sur ce PC.",
+          hint +
+          " Vérifiez : 1) INSTALLER.bat sur CE PC 2) ZK-9500 branché 3) ouvrir http://127.0.0.1:5002/status 4) autoriser sgrhbridge:// dans Chrome.",
       };
     }
   }
 
-  /**
-   * Vérifie le bridge ; s'il est offline, lance l'installeur via sgrhbridge:// et attend.
-   */
   async function ensureRunning(options = {}) {
-    const waitMs = options.waitMs || 20000;
+    const waitMs = options.waitMs || 25000;
     const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
 
     let st = await status();
@@ -133,7 +147,7 @@
 
     const started = Date.now();
     while (Date.now() - started < waitMs) {
-      await sleep(700);
+      await sleep(800);
       st = await status();
       if (st.ok) {
         if (onProgress) onProgress("Bridge prêt");
@@ -142,7 +156,8 @@
     }
 
     throw new Error(
-      "Impossible de démarrer le bridge. Installez SGRH Fingerprint Bridge (INSTALLER.bat) sur ce PC Windows, branchez le ZK-9500, puis réessayez."
+      st.message ||
+        "Impossible de joindre le bridge. Sur CE PC Windows : relancez INSTALLER.bat, démarrez « SGRH Fingerprint Bridge », branchez le ZK-9500, puis testez http://127.0.0.1:5002/status"
     );
   }
 
@@ -201,7 +216,12 @@
         return { unauthorized: true };
       }
       if (!res.ok) {
-        throw new Error(data.error || data.detail || data.title || `Échec scan (HTTP ${res.status})`);
+        throw new Error(
+          data.error ||
+            data.detail ||
+            data.title ||
+            `Échec scan (HTTP ${res.status}). Vérifiez que le ZK-9500 est branché et les DLL SDK installées.`
+        );
       }
       if (!data.template) {
         throw new Error("Aucun gabarit reçu du lecteur");
@@ -210,10 +230,6 @@
     });
   }
 
-  /**
-   * @param {string} probeTemplate
-   * @param {Array<{id:number, template_b64:string}>} gallery
-   */
   async function match(probeTemplate, gallery) {
     await ensureRunning();
     return withApiKey(async (key) => {
@@ -230,9 +246,7 @@
         return { unauthorized: true };
       }
       if (res.status === 404) {
-        throw new Error(
-          "Ce bridge ne gère pas /match — réinstallez Fingerprint Bridge (INSTALLER.bat)."
-        );
+        throw new Error("Bridge trop ancien (/match manquant) — réinstallez avec le payload à jour.");
       }
       if (!res.ok) {
         throw new Error(data.error || data.detail || data.title || `Échec match (HTTP ${res.status})`);
@@ -242,7 +256,7 @@
   }
 
   global.LocalBiometricBridge = {
-    bridgeUrl,
+    bridgeUrl: () => configuredUrls()[0],
     status,
     ensureRunning,
     launchInstalledBridge,

@@ -1838,7 +1838,7 @@
         });
       }
     </script>
-    <script src="{{ asset('js/biometric-bridge-client.js') }}?v=20260929a"></script>
+    <script src="{{ asset('js/biometric-bridge-client.js') }}?v=20260929b"></script>
     <script src="{{ asset('js/dashboard.js') }}?v=20260929a"></script>
     <script src="{{ asset('js/sgrh-vision.js') }}?v=20260929a"></script>
   
