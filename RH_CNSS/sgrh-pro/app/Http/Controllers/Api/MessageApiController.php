@@ -30,6 +30,7 @@ class MessageApiController extends Controller
 
                 return [
                     'id' => $u->id,
+                    'user_id' => $u->id,
                     'username' => $u->username,
                     'name' => $name !== '' ? $name : $u->username,
                     'employee_id' => $u->employee_id,

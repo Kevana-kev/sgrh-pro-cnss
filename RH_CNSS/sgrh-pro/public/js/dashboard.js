@@ -1720,11 +1720,15 @@ function populateMessageRecipientSelect() {
   const select = $("newConversationRecipient");
   if (!select) return;
 
-  const recipients = (appState.messageRecipients || []).filter((item) => Number(item.employee_id || 0) > 0);
+  const recipients = (appState.messageRecipients || []).filter((item) => {
+    const userId = Number(item.user_id || item.id || 0);
+    const employeeId = Number(item.employee_id || 0);
+    return userId > 0 || employeeId > 0;
+  });
   const options = recipients
     .map((recipient) => {
-      const hasUserId = Number(recipient.user_id || 0) > 0;
-      const value = hasUserId ? `u:${recipient.user_id}` : `e:${recipient.employee_id}`;
+      const userId = Number(recipient.user_id || recipient.id || 0);
+      const value = userId > 0 ? `u:${userId}` : `e:${recipient.employee_id}`;
       return `<option value="${value}">${messageRecipientOptionLabel(recipient)}</option>`;
     })
     .join("");
@@ -3010,7 +3014,7 @@ async function startNewConversation() {
 
   const recipient = (appState.messageRecipients || []).find((item) => {
     if (kind === "u") {
-      return Number(item.user_id || 0) === parsedId;
+      return Number(item.user_id || item.id || 0) === parsedId;
     }
     return Number(item.employee_id || 0) === parsedId;
   });
@@ -3019,7 +3023,7 @@ async function startNewConversation() {
     throw new Error("Destinataire introuvable");
   }
 
-  const userId = Number(recipient.user_id || 0);
+  const userId = Number(recipient.user_id || recipient.id || 0);
   const employeeId = Number(recipient.employee_id || 0);
 
   if (userId) {
@@ -3409,16 +3413,23 @@ function bindForms() {
           method: "POST",
           body: JSON.stringify(payload),
         });
-      } else {
-        const createdMessage = await api(`/api/messages`, {
+      } else if (activeRecipientEmployeeId) {
+        // Compat: résoudre l'user lié à l'employé si possible
+        const linked = (appState.messageRecipients || []).find(
+          (item) => Number(item.employee_id || 0) === activeRecipientEmployeeId
+        );
+        const linkedUserId = Number(linked?.user_id || linked?.id || 0);
+        if (!linkedUserId) {
+          throw new Error("Cet agent n'a pas de compte utilisateur pour la messagerie");
+        }
+        await api(`/api/messages/thread/${linkedUserId}`, {
           method: "POST",
-          body: JSON.stringify({
-            recipient_employee_id: activeRecipientEmployeeId,
-            content: payload.content,
-          }),
+          body: JSON.stringify(payload),
         });
-        appState.activeChatUserId = Number(createdMessage?.recipient_user_id || 0) || null;
+        appState.activeChatUserId = linkedUserId;
         appState.activeChatRecipientEmployeeId = null;
+      } else {
+        throw new Error("Sélectionne d'abord une discussion");
       }
 
       event.target.reset();
